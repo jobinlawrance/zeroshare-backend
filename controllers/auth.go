@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	jtoken "github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
+	"github.com/valyala/fasthttp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"gorm.io/gorm"
@@ -85,9 +88,20 @@ func GetAuthData(c *fiber.Ctx, oauthConf *oauth2.Config, db *gorm.DB, redisStore
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	if user.ZtNetworkId == "" {
+		nwid, err := CreateNewZTNetwork(context.Background())
+		if err != nil {
+			log.Fatal(err)
+		}
+		user.ZtNetworkId = nwid
+		db.Where(structs.User{Email: user.Email}).Updates(structs.User{ZtNetworkId: user.ZtNetworkId})
+	}
+	
 	tokenResponse := structs.TokenResponse{
 		AuthToken:   t,
 		RefresToken: "", // You need to provide a value for RefresToken
+		ZtNetworkId: user.ZtNetworkId,
 	}
 
 	log.Printf("token response is %v", tokenResponse)
@@ -99,4 +113,45 @@ func GetAuthData(c *fiber.Ctx, oauthConf *oauth2.Config, db *gorm.DB, redisStore
 	redisStore.Publish(context.Background(), sessionToken, jsonData)
 
 	return c.Status(200).SendString("You may close this window")
+}
+
+func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
+
+	c.Set("Content-Type", "text/event-stream")
+	c.Set("Cache-Control", "no-cache")
+	c.Set("Connection", "keep-alive")
+	c.Set("Transfer-Encoding", "chunked")
+
+	subscriber := redisStore.Subscribe(context.Background(), sessionToken)
+
+	// Listen for messages on the Redis channel and send them as SSE
+	c.Status(fiber.StatusOK).Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
+		for {
+			msg, err := subscriber.ReceiveMessage(context.Background())
+			if err != nil {
+				log.Printf("Error receiving message: %v", err)
+				break
+			}
+
+			// Send the SSE formatted data
+			log.Printf("Sending SSE event to client: %s", sessionToken)
+			data := fmt.Sprintf("data: %s\n\n", msg.Payload)
+
+			log.Printf("Payload: %s", msg.Payload)
+
+			// Write data to the stream
+			if _, err := w.WriteString(data); err != nil {
+				log.Printf("Error writing to stream: %v", err)
+				break
+			}
+
+			// Flush the response to send the data immediately
+			if err := w.Flush(); err != nil {
+				log.Printf("Error flushing stream: %v", err)
+				break
+			}
+		}
+	}))
+
+	return nil
 }

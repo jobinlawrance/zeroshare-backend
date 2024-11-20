@@ -42,9 +42,15 @@ func main() {
 		return c.SendString("Hello, World!")
 	})
 
-	app.Get("/oauth/google", func(c *fiber.Ctx) error {
-		url := oauthConf.AuthCodeURL("state") //get auth URL
-		return c.Redirect(url)                //redirect to google auth url
+	app.Get("/sse/:sessionToken", func(c *fiber.Ctx) error {
+		sessionToken := c.Params("sessionToken")
+		return controller.SSE(c, redisStore, sessionToken)
+	})
+
+	app.Get("/login/:token", func(c *fiber.Ctx) error {
+		sessionToken := c.Params("token")
+		url := oauthConf.AuthCodeURL(sessionToken)
+		return c.Redirect(url)
 	})
 
 	app.Get("auth/google/callback", func(c *fiber.Ctx) error {

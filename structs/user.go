@@ -1,4 +1,3 @@
-
 package structs
 
 import "github.com/google/uuid"
@@ -13,4 +12,5 @@ type User struct {
 	Name          string    `gorm:"not null" json:"name"`
 	Picture       string    `json:"picture"`
 	VerifiedEmail bool      `gorm:"not null" json:"verified_email"`
+	ZtNetworkId   string    `json:"zt_network_id"`
 }
