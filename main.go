@@ -3,13 +3,18 @@ package main
 import (
 	"log"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
+
+	controller "zeroshare-backend/controllers"
 )
 
 var DB *gorm.DB
+var redisStore *redis.Client
 
 func main() {
 	app := fiber.New()
@@ -21,11 +26,31 @@ func main() {
 		log.Fatal("Dayum, Error loading .env file:", er)
 	}
 
-	
+	DB = controller.InitDatabase()
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*", // Adjust this to allow only specific origins if needed
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders: "Authorization, Content-Type, Accept",
+	}))
+
+	oauthConf := controller.SetUpOAuth()
+
+	redisStore = controller.SetupRedis()
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello, World!")
 	})
 
-	app.Listen(":3000")
+	app.Get("/oauth/google", func(c *fiber.Ctx) error {
+		url := oauthConf.AuthCodeURL("state") //get auth URL
+		return c.Redirect(url)                //redirect to google auth url
+	})
+
+	app.Get("auth/google/callback", func(c *fiber.Ctx) error {
+		//get code from query params for generating token
+		return controller.GetAuthData(c, oauthConf, DB, redisStore)
+	})
+
+	app.Listen(":4000")
 }
