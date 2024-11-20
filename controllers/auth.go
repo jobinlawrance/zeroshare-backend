@@ -91,7 +91,7 @@ func GetAuthData(c *fiber.Ctx, oauthConf *oauth2.Config, db *gorm.DB, redisStore
 	}
 
 	if user.ZtNetworkId == "" {
-		nwid, err := CreateNewZTNetwork(context.Background())
+		nwid, err := CreateNewZTNetwork(context.Background(), user.Name)
 		if err != nil {
 			log.Fatal(err)
 		}
