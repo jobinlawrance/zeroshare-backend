@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -154,4 +155,30 @@ func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
 	}))
 
 	return nil
+}
+
+func GetFromToken(c *fiber.Ctx, key string) (interface{}, error) {
+	// Extract the JWT token from the Authorization header
+	tokenString := c.Get("Authorization")[7:] // Strip "Bearer " prefix
+	if tokenString == "" {
+		return nil, errors.New("authorization header is missing")
+	}
+
+	// Parse the token
+	token, _ := jtoken.Parse(tokenString, func(token *jtoken.Token) (interface{}, error) {
+		// Ensure that the token's signing method is what we expect
+		if _, ok := token.Method.(*jtoken.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return config.Secret, nil
+	})
+
+	// Extract the claims from the token (assuming it's a map of claims)
+	claims, ok := token.Claims.(jtoken.MapClaims)
+	if !ok {
+		return nil, errors.New("failed to parse token claims")
+	}
+
+	// Check if the user is an admin
+	return claims[key], nil
 }

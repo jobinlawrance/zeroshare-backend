@@ -1,20 +1,39 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
+	"strings"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
+	"zeroshare-backend/config"
 	controller "zeroshare-backend/controllers"
+	"zeroshare-backend/middlewares"
+	"zeroshare-backend/structs"
 )
 
 var DB *gorm.DB
 var redisStore *redis.Client
+
+func shoudSkipPath(c *fiber.Ctx) bool {
+	// Skip authentication for login and callback routes
+	path := c.Path()
+
+	// Handle dynamic routes manually (e.g., /login/qr/:token)
+	if path == "/oauth/google" || path == "/auth/google/callback" ||
+		strings.HasPrefix(path, "/login/") ||
+		strings.HasPrefix(path, "/sse/") {
+		return true
+	}
+	return false
+}
 
 func main() {
 	app := fiber.New()
@@ -33,6 +52,16 @@ func main() {
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders: "Authorization, Content-Type, Accept",
 	}))
+
+	// JWT Middleware
+	app.Use(func(c *fiber.Ctx) error {
+		if shoudSkipPath(c) {
+			// Skip JWT authentication for these paths
+			return c.Next()
+		}
+		// Otherwise, apply JWT middleware
+		return middlewares.NewAuthMiddleware(config.Secret)(c)
+	})
 
 	oauthConf := controller.SetUpOAuth()
 
@@ -56,6 +85,22 @@ func main() {
 	app.Get("auth/google/callback", func(c *fiber.Ctx) error {
 		//get code from query params for generating token
 		return controller.GetAuthData(c, oauthConf, DB, redisStore)
+	})
+
+	app.Post("/node", func(c *fiber.Ctx) error {
+		response := new(structs.NodeResponse)
+		json.Unmarshal(c.Body(), response)
+		userId, _ := controller.GetFromToken(c, "ID")
+		uid, _ := uuid.Parse(userId.(string))
+		peer := structs.Peer{
+			MachineName: response.MachineName,
+			NetworkId:   response.NetworkId,
+			NodeId:      response.NodeId,
+			UserId:      uid,
+		}
+
+		DB.Where(structs.Peer{NodeId: response.NodeId, NetworkId: response.NetworkId}).FirstOrCreate(&peer)
+		return c.SendStatus(fiber.StatusOK)
 	})
 
 	app.Listen(":4000")

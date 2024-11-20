@@ -21,6 +21,7 @@ func InitDatabase() *gorm.DB {
 
 	// AutoMigrate the User schema
 	db.AutoMigrate(&structs.User{})
+	db.AutoMigrate(&structs.Peer{})
 
 	return db
 }
