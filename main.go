@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"strings"
@@ -99,7 +100,8 @@ func main() {
 			UserId:      uid,
 		}
 
-		DB.Where(structs.Peer{NodeId: response.NodeId, NetworkId: response.NetworkId}).FirstOrCreate(&peer)
+		controller.AddPeerAndAuthorize(context.Background(), peer, DB)
+
 		return c.SendStatus(fiber.StatusOK)
 	})
 

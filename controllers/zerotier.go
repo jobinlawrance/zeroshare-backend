@@ -9,7 +9,11 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
+	"zeroshare-backend/structs"
+
+	"gorm.io/gorm"
 )
 
 type Response struct {
@@ -108,4 +112,36 @@ func generateNetworkConfig(name string) NetworkConfig {
 		},
 		EnableBroadcast: true,
 	}
+}
+
+func AddPeerAndAuthorize(ctx context.Context, peer structs.Peer, DB *gorm.DB) error {
+	url := fmt.Sprintf("https://zero-controller.jkbx.live/controller/network/%s/member/%s", peer.NetworkId, peer.NodeId)
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	jsonStr := fmt.Sprintf(`{"name": "%s", "authorized": true}`, peer.MachineName)
+	reader := strings.NewReader(jsonStr)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reader)
+	req.Header.Add("X-ZT1-AUTH", os.Getenv("ZU_TOKEN"))
+
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// Send the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %v", err)
+
+	}
+	defer resp.Body.Close()
+
+	// Check for a successful status code
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	DB.Where(structs.Peer{NodeId: peer.NodeId, NetworkId: peer.NetworkId}).FirstOrCreate(&peer)
+
+	return nil
 }
