@@ -115,5 +115,14 @@ func main() {
 		return c.JSON(tokenResponse)
 	})
 
-	log.Fatal(app.Listen(":5000"))
+	app.Get("/peers", func(c *fiber.Ctx) error {
+		userId, _ := controller.GetFromToken(c, "ID")
+		members, err := controller.FetchAllMembers(context.Background(), c.Query("networkId"), userId.(string), DB)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+		}
+		return c.JSON(members)
+	})
+
+	log.Fatal(app.Listen(":4000"))
 }
