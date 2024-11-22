@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -124,5 +125,5 @@ func main() {
 		return c.JSON(members)
 	})
 
-	log.Fatal(app.Listen(":4000"))
+	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
 }
