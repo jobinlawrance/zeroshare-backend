@@ -5,3 +5,7 @@ type TokenResponse struct {
 	RefresToken string `json:"refresh_token"`
 	ZtNetworkId string `json:"zt_network_id"`
 }
+
+type GoogleTokenResponse struct {
+	Token string `json:"token"`
+}

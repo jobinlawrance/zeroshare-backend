@@ -105,5 +105,15 @@ func main() {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
+	app.Post("/login/verify-google", func(c *fiber.Ctx) error { 
+		response := new(structs.GoogleTokenResponse)
+		json.Unmarshal(c.Body(), response)
+		tokenResponse, err := controller.GetAuthDataFromGooglePayload(response.Token, DB)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+		}
+		return c.JSON(tokenResponse)
+	})
+
 	log.Fatal(app.Listen(":5000"))
 }

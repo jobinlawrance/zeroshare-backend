@@ -19,6 +19,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	idToken "google.golang.org/api/idtoken"
 	"gorm.io/gorm"
 )
 
@@ -64,7 +65,6 @@ func GetAuthData(c *fiber.Ctx, oauthConf *oauth2.Config, db *gorm.DB, redisStore
 		return c.Status(fiber.StatusInternalServerError).SendString("Error unmarshal json body " + err.Error())
 	}
 
-
 	db.Where(structs.User{Email: user.Email}).FirstOrCreate(&user)
 
 	log.Printf("user data is %v", user)
@@ -72,15 +72,28 @@ func GetAuthData(c *fiber.Ctx, oauthConf *oauth2.Config, db *gorm.DB, redisStore
 	sessionToken := c.Query("state")
 
 	log.Printf("Sending publish message to %s -> %s", sessionToken, user.GoogleID)
+	tokenResponse := createZTNetworkAndGetToken(user, db)
 
+	log.Printf("token response is %v", tokenResponse)
+
+	jsonData, err := json.Marshal(tokenResponse)
+	if err != nil {
+		log.Fatalf("Error marshalling JSON: %v", err)
+	}
+	redisStore.Publish(context.Background(), sessionToken, jsonData)
+
+	return c.Status(200).SendString("You may close this window")
+}
+
+func createZTNetworkAndGetToken(user structs.User, db *gorm.DB) structs.TokenResponse {
 	exp := time.Now().Add(time.Hour * 72)
 
 	// Create the JWT claims, which includes the user ID and expiry time
 	claims := jtoken.MapClaims{
-		"ID":                     user.ID,
-		"name":                   user.Name,
-		"email":                  user.Email,
-		"exp":                    exp.Unix(),
+		"ID":    user.ID,
+		"name":  user.Name,
+		"email": user.Email,
+		"exp":   exp.Unix(),
 	}
 	// Create token
 	jwtToken := jtoken.NewWithClaims(jtoken.SigningMethodHS256, claims)
@@ -98,22 +111,34 @@ func GetAuthData(c *fiber.Ctx, oauthConf *oauth2.Config, db *gorm.DB, redisStore
 		user.ZtNetworkId = nwid
 		db.Where(structs.User{Email: user.Email}).Updates(structs.User{ZtNetworkId: user.ZtNetworkId})
 	}
-	
-	tokenResponse := structs.TokenResponse{
+
+	return structs.TokenResponse{
 		AuthToken:   t,
 		RefresToken: "", // You need to provide a value for RefresToken
 		ZtNetworkId: user.ZtNetworkId,
 	}
+}
 
-	log.Printf("token response is %v", tokenResponse)
-
-	jsonData, err := json.Marshal(tokenResponse)
+func GetAuthDataFromGooglePayload(token string, db *gorm.DB) (structs.TokenResponse, error) {
+	payload, err := idToken.Validate(context.Background(), token, os.Getenv("GOOGLE_CLIENT_ID"))
 	if err != nil {
-		log.Fatalf("Error marshalling JSON: %v", err)
+		log.Println(err)
+		return structs.TokenResponse{}, err
 	}
-	redisStore.Publish(context.Background(), sessionToken, jsonData)
 
-	return c.Status(200).SendString("You may close this window")
+	user := structs.User{
+		Email:         payload.Claims["email"].(string),
+		FamilyName:    payload.Claims["family_name"].(string),
+		GivenName:     payload.Claims["given_name"].(string),
+		Locale:        "",
+		Name:          payload.Claims["name"].(string),
+		Picture:       payload.Claims["picture"].(string),
+		VerifiedEmail: payload.Claims["email_verified"].(bool),
+	}
+
+	db.Where(structs.User{Email: user.Email}).FirstOrCreate(&user)
+
+	return createZTNetworkAndGetToken(user, db), nil
 }
 
 func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
