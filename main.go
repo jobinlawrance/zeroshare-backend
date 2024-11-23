@@ -99,6 +99,7 @@ func main() {
 			NetworkId:   response.NetworkId,
 			NodeId:      response.NodeId,
 			UserId:      uid,
+			Platform:    response.Platform,
 		}
 
 		controller.AddPeerAndAuthorize(context.Background(), peer, DB)

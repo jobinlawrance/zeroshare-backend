@@ -73,6 +73,7 @@ func FetchAllMembers(ctx context.Context, networkId string, userId string, db *g
 		if err != nil {
 			return nil, err
 		}
+		member.Platform = peer.Platform
 		members = append(members, member)
 	}
 	return members, nil
@@ -154,6 +155,7 @@ type Member struct {
 	VMinor                      int      `json:"vMinor"`
 	VProto                      int      `json:"vProto"`
 	VRev                        int      `json:"vRev"`
+	Platform                    string   `json:"platform"`
 }
 
 func getRandomInt(min, max int) int {

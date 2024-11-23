@@ -8,6 +8,7 @@ type Peer struct {
 	NetworkId   string    `gorm:"not null" json:"network_id"`
 	NodeId      string    `gorm:"not null" json:"node_id"`
 	UserId      uuid.UUID `gorm:"type:uuid;not null" json:"user_id"`
+	Platform    string    `gorm:"null" json:"platform"`
 
 	User User `gorm:"foreignKey:UserId;references:ID"`
 }
