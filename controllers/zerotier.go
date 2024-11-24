@@ -62,21 +62,21 @@ func CreateNewZTNetwork(ctx context.Context, name string) (string, error) {
 	return result.Nwid, nil
 }
 
-func FetchAllMembers(ctx context.Context, networkId string, userId string, db *gorm.DB) ([]Member, error) {
+func FetchAllMembers(ctx context.Context, networkId string, userId string, db *gorm.DB) ([]structs.Peer, error) {
 	var peers []structs.Peer
 	if err := db.Where("network_id = ? AND user_id = ?", networkId, userId).Find(&peers).Error; err != nil {
 		return nil, err
 	}
-	var members []Member
+	
 	for _, peer := range peers {
-		member, err := getMemberDetails(ctx, networkId, peer.NodeId)
-		if err != nil {
-			return nil, err
+		if strings.Contains(peer.MachineName, "Mac") {
+			peer.IpAddress = "69.69.73.46"
 		}
-		member.Platform = peer.Platform
-		members = append(members, member)
+		if strings.Contains(peer.MachineName, "iPad") {
+			peer.IpAddress = "69.69.73.50"
+		}
 	}
-	return members, nil
+	return peers, nil
 }
 
 func getMemberDetails(ctx context.Context, networkId string, nodeId string) (Member, error) {

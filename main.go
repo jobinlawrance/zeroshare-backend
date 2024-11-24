@@ -49,6 +49,8 @@ func main() {
 
 	DB = controller.InitDatabase()
 
+	controller.InitNebula(context.Background())
+
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*", // Adjust this to allow only specific origins if needed
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
@@ -124,6 +126,29 @@ func main() {
 			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 		}
 		return c.JSON(members)
+	})
+
+	app.Post("/nebula/sign-public-key", func(c *fiber.Ctx) error {
+		body := struct {
+			PublicKey string `json:"public_key"`
+		}{}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(400).JSON(fiber.Map{
+				"error": "Invalid request body",
+			})
+		}
+
+		// TODO, get last public ip
+		signedKey, err := controller.SignPublicKey(body.PublicKey, "")
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"error": "Failed to sign public key",
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"signed_key": signedKey,
+		})
 	})
 
 	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
