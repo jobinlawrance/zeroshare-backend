@@ -139,7 +139,7 @@ func main() {
 		}
 
 		// TODO, get last public ip
-		signedKey, err := controller.SignPublicKey(body.PublicKey, "")
+		signedKey, caCert, err := controller.SignPublicKey(body.PublicKey, "")
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{
 				"error": "Failed to sign public key",
@@ -148,6 +148,7 @@ func main() {
 
 		return c.JSON(fiber.Map{
 			"signed_key": signedKey,
+			"ca_cert":    caCert,
 		})
 	})
 

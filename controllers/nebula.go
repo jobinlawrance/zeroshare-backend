@@ -31,12 +31,12 @@ func InitNebula(ctx context.Context) {
 	}
 }
 
-func SignPublicKey( publicKey string, lastIp string) (string, error) {
+func SignPublicKey( publicKey string, lastIp string) (string, string, error) {
 	uid := uuid.New().String()
 	fileName := fmt.Sprintf("%s.pub", uid)
 	// Save the public key to the file
 	if err := os.WriteFile(fileName, []byte(publicKey), 0644); err != nil {
-		return "", err
+		return "","", err
 	}
 	defer os.Remove(fileName)
 
@@ -48,17 +48,22 @@ func SignPublicKey( publicKey string, lastIp string) (string, error) {
 	cmd := exec.Command("nebula-cert", "sign", "-in-pub", fileName, "-name", certName, "-ip", ipWithCIDR)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	// Read the generated certificate file
 	certFile := fmt.Sprintf("%s.crt", certName)
 	certContent, err := os.ReadFile(certFile)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer os.Remove(certFile)
 
-	return string(certContent), nil
+	caCert, err := os.ReadFile("ca.crt")
+	if err != nil {
+		return "", "", err
+	}
+
+	return string(certContent), string(caCert), nil
 }
 
 // Helper function to check if a file exists
