@@ -9,7 +9,7 @@ type Device struct {
 	DeviceId    string    `gorm:"not null" json:"device_id"`
 	IpAddress   string    `gorm:"null" json:"ip_address"`
 	Created     int64     `gorm:"autoCreateTime"`
-	Updated     int64     `gorm:"autoUpdateTime:milli"`
+	Updated     int64     `gorm:"autoUpdateTime:milli" json:"updated"`
 	UserId      uuid.UUID `gorm:"type:uuid;not null" json:"user_id"`
 	User        User      `gorm:"foreignKey:UserId;references:ID"`
 }

@@ -3,11 +3,15 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"os"
 	"os/exec"
+	structs "zeroshare-backend/structs"
+
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func InitNebula(ctx context.Context) {
@@ -30,22 +34,46 @@ func InitNebula(ctx context.Context) {
 	}
 }
 
-func SignPublicKey( publicKey string, lastIp string) (string, string, map[string]interface{}, error) {
+func SignPublicKey(publicKey string, deviceId string, db *gorm.DB) (string, string, map[string]interface{}, error) {
 	uid := uuid.New().String()
 	fileName := fmt.Sprintf("%s.pub", uid)
 	// Save the public key to the file
 	if err := os.WriteFile(fileName, []byte(publicKey), 0644); err != nil {
-		return "","", map[string]interface{}{}, err
+		return "", "", map[string]interface{}{}, err
 	}
 	defer os.Remove(fileName)
 
-	newIP := incrementIP(lastIp)
-	fmt.Println(newIP)
+	var latestDevice structs.Device
+	err := db.Model(&structs.Device{}).Order("updated DESC").First(&latestDevice).Error
+
+	if err != nil {
+		// Handle error, e.g., log the error or return an appropriate error response
+		log.Println("Error fetching latest device:", err)
+		return "", "", map[string]interface{}{}, err
+	}
+
+	lastIp := latestDevice.IpAddress
+
+	var device structs.Device
+	err = db.Where("device_id = ?", deviceId).First(&device).Error
+	if err != nil {
+		return "", "", map[string]interface{}{}, err
+	}
+
+	newIP := ""
+	if device.IpAddress == "" {
+		newIP = incrementIP(lastIp)
+	} else {
+		newIP = device.IpAddress
+	}
+
 	ipWithCIDR := fmt.Sprintf("%s/16", newIP)
+
+	db.Where("device_id = ?", deviceId).Updates(structs.Device{IpAddress: newIP})
 
 	certName := fmt.Sprintf("%s.neb.jkbx.live", uid)
 	cmd := exec.Command("nebula-cert", "sign", "-in-pub", fileName, "-name", certName, "-ip", ipWithCIDR)
-	_, err := cmd.CombinedOutput()
+	_, err = cmd.CombinedOutput()
 	if err != nil {
 		return "", "", map[string]interface{}{}, err
 	}

@@ -119,7 +119,7 @@ func main() {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	app.Post("/login/verify-google", func(c *fiber.Ctx) error { 
+	app.Post("/login/verify-google", func(c *fiber.Ctx) error {
 		response := new(structs.GoogleTokenResponse)
 		json.Unmarshal(c.Body(), response)
 		tokenResponse, err := controller.GetAuthDataFromGooglePayload(response.Token, DB)
@@ -141,6 +141,7 @@ func main() {
 	app.Post("/nebula/sign-public-key", func(c *fiber.Ctx) error {
 		body := struct {
 			PublicKey string `json:"public_key"`
+			DeviceId  string `json:"device_id"`
 		}{}
 		if err := c.BodyParser(&body); err != nil {
 			return c.Status(400).JSON(fiber.Map{
@@ -149,7 +150,7 @@ func main() {
 		}
 
 		// TODO, get last public ip
-		signedKey, caCert, incomingSite, err := controller.SignPublicKey(body.PublicKey, "")
+		signedKey, caCert, incomingSite, err := controller.SignPublicKey(body.PublicKey, body.DeviceId, DB)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{
 				"error": "Failed to sign public key",
@@ -157,8 +158,8 @@ func main() {
 		}
 
 		return c.JSON(fiber.Map{
-			"signed_key": signedKey,
-			"ca_cert":    caCert,
+			"signed_key":    signedKey,
+			"ca_cert":       caCert,
 			"incoming_site": incomingSite,
 		})
 	})
