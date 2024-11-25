@@ -109,6 +109,16 @@ func main() {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
+	app.Post("/device", func(c *fiber.Ctx) error {
+		response := new(structs.Device)
+		json.Unmarshal(c.Body(), response)
+		userId, _ := controller.GetFromToken(c, "ID")
+		uid, _ := uuid.Parse(userId.(string))
+		response.UserId = uid
+		DB.Where("device_id = ?", response.DeviceId).FirstOrCreate(&response)
+		return c.SendStatus(fiber.StatusOK)
+	})
+
 	app.Post("/login/verify-google", func(c *fiber.Ctx) error { 
 		response := new(structs.GoogleTokenResponse)
 		json.Unmarshal(c.Body(), response)
