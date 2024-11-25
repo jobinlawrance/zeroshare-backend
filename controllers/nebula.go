@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-
 	"github.com/google/uuid"
 )
 
@@ -31,12 +30,12 @@ func InitNebula(ctx context.Context) {
 	}
 }
 
-func SignPublicKey( publicKey string, lastIp string) (string, string, error) {
+func SignPublicKey( publicKey string, lastIp string) (string, string, map[string]interface{}, error) {
 	uid := uuid.New().String()
 	fileName := fmt.Sprintf("%s.pub", uid)
 	// Save the public key to the file
 	if err := os.WriteFile(fileName, []byte(publicKey), 0644); err != nil {
-		return "","", err
+		return "","", map[string]interface{}{}, err
 	}
 	defer os.Remove(fileName)
 
@@ -48,22 +47,49 @@ func SignPublicKey( publicKey string, lastIp string) (string, string, error) {
 	cmd := exec.Command("nebula-cert", "sign", "-in-pub", fileName, "-name", certName, "-ip", ipWithCIDR)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", "", err
+		return "", "", map[string]interface{}{}, err
 	}
 	// Read the generated certificate file
 	certFile := fmt.Sprintf("%s.crt", certName)
 	certContent, err := os.ReadFile(certFile)
 	if err != nil {
-		return "", "", err
+		return "", "", map[string]interface{}{}, err
 	}
 	defer os.Remove(certFile)
 
 	caCert, err := os.ReadFile("ca.crt")
 	if err != nil {
-		return "", "", err
+		return "", "", map[string]interface{}{}, err
 	}
 
-	return string(certContent), string(caCert), nil
+	return string(certContent), string(caCert), getIncomingSite(uid), nil
+}
+
+func getIncomingSite(id string) map[string]interface{} {
+	return map[string]interface{}{
+		"name": id,
+		"id":   id,
+		"staticHostmap": map[string]interface{}{
+			"69.69.0.1": map[string]interface{}{
+				"lighthouse": true,
+				"destinations": []string{
+					"34.47.177.77:4242",
+				},
+			},
+		},
+		"unsafeRoutes": []string{},
+		"ca":           "",
+		"cert":         "",
+		"key":          "",
+		"lhDuration":   0,
+		"port":         0,
+		"mtu":          1300,
+		"cipher":       "aes",
+		"sortKey":      0,
+		"logVerbosity": "info",
+		"managed":      false,
+		"rawConfig":    nil,
+	}
 }
 
 // Helper function to check if a file exists
