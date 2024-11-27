@@ -44,7 +44,7 @@ func SignPublicKey(publicKey string, deviceId string, db *gorm.DB) (string, stri
 	defer os.Remove(fileName)
 
 	var latestDevice structs.Device
-	err := db.Model(&structs.Device{}).Order("updated DESC").First(&latestDevice).Error
+	err := db.Model(&structs.Device{}).Where("ip_address IS NOT NULL AND ip_address <> ''").Order("updated DESC").First(&latestDevice).Error
 
 	if err != nil {
 		// Handle error, e.g., log the error or return an appropriate error response
@@ -66,6 +66,7 @@ func SignPublicKey(publicKey string, deviceId string, db *gorm.DB) (string, stri
 	} else {
 		newIP = device.IpAddress
 	}
+	log.Printf("New IP: %s", newIP)
 
 	ipWithCIDR := fmt.Sprintf("%s/16", newIP)
 
