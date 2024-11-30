@@ -171,5 +171,16 @@ func main() {
 		})
 	})
 
+	app.Post("/device/send/:id", func(c *fiber.Ctx) error {
+		deviceId := c.Params("id")
+		redisStore.Publish(context.Background(), deviceId, c.Body())
+		return c.SendStatus(fiber.StatusOK)
+	})
+	
+	app.Get("/device/receive/:id", func(c *fiber.Ctx) error {
+		deviceId := c.Params("id")
+		return controller.DeviceSSE(c, redisStore, deviceId)
+	})
+
 	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
 }
