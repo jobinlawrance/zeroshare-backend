@@ -46,6 +46,7 @@ func DeviceSSE(c *fiber.Ctx, redisStore *redis.Client, deviceId string) error {
 				log.Printf("Error flushing stream: %v", err)
 				break
 			}
+			log.Println("Received message:", msg.Payload)
 		}
 	}))
 

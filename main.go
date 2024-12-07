@@ -19,6 +19,9 @@ import (
 	controller "zeroshare-backend/controllers"
 	"zeroshare-backend/middlewares"
 	"zeroshare-backend/structs"
+
+	pb "zeroshare-backend/proto"
+
 )
 
 var DB *gorm.DB
@@ -31,6 +34,7 @@ func shoudSkipPath(c *fiber.Ctx) bool {
 	// Handle dynamic routes manually (e.g., /login/qr/:token)
 	if path == "/oauth/google" || path == "/auth/google/callback" ||
 		strings.HasPrefix(path, "/login/") ||
+		strings.HasPrefix(path, "/notification-tone") ||
 		strings.HasPrefix(path, "/sse/") {
 		return true
 	}
@@ -48,6 +52,7 @@ func main() {
 	}
 
 	DB = controller.InitDatabase()
+	go pb.StartGRPCServer(DB)
 
 	controller.InitNebula(context.Background())
 
@@ -173,14 +178,28 @@ func main() {
 
 	app.Post("/device/send/:id", func(c *fiber.Ctx) error {
 		deviceId := c.Params("id")
-		redisStore.Publish(context.Background(), deviceId, c.Body())
+		userId, _ := controller.GetFromToken(c, "ID")
+		SSERequest := new(structs.SSERequest)
+		json.Unmarshal(c.Body(), SSERequest)
+		device := new(structs.Device)
+		DB.Where("device_id = ? AND user_id = ?", SSERequest.UniqueID, userId).First(&device)
+		SSEResponse := new(structs.SSEResponse)
+		SSEResponse.Type = SSERequest.Type
+		SSEResponse.Data = SSERequest.Data
+		SSEResponse.Device = *device
+		jsonData , _ := json.Marshal(SSEResponse)
+		log.Println("Device ID: ", deviceId, "User Id:", userId)
+		redisStore.Publish(context.Background(), deviceId, jsonData)
 		return c.SendStatus(fiber.StatusOK)
 	})
-	
+
 	app.Get("/device/receive/:id", func(c *fiber.Ctx) error {
 		deviceId := c.Params("id")
+		log.Println("Device ID: ", deviceId)
 		return controller.DeviceSSE(c, redisStore, deviceId)
 	})
+
+
 
 	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
 }

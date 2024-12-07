@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package sse;
+
+import "google/protobuf/struct.proto"; // For handling JSON-like data
+
+option go_package = "/proto/sse";
+
+message SSERequest {
+  string type = 1;
+  google.protobuf.Struct data = 2; // To handle JSON data
+  string unique_id = 3;
+}
+
+message Device {
+  string id = 1;                 // UUID as a string
+  string machine_name = 2;       // Non-nullable string
+  string platform = 3;           // Non-nullable string
+  string device_id = 4;          // Non-nullable string
+  string ip_address = 5;         // Nullable string
+  int64 created = 6;             // Timestamp
+  int64 updated = 7;             // Millisecond timestamp
+  string user_id = 8;            // UUID as a string
+}
+
+message SSEResponse {
+  string type = 1;
+  google.protobuf.Struct data = 2; // To handle JSON data
+  Device device = 3;
+}
+
+service DeviceService {
+  rpc DeviceStream (stream SSERequest) returns (stream SSEResponse);
+}
