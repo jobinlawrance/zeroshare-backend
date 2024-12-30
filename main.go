@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/contrib/websocket"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -21,7 +22,6 @@ import (
 	"zeroshare-backend/structs"
 
 	pb "zeroshare-backend/proto"
-
 )
 
 var DB *gorm.DB
@@ -34,6 +34,7 @@ func shoudSkipPath(c *fiber.Ctx) bool {
 	// Handle dynamic routes manually (e.g., /login/qr/:token)
 	if path == "/oauth/google" || path == "/auth/google/callback" ||
 		strings.HasPrefix(path, "/login/") ||
+		strings.HasPrefix(path, "/stream") ||
 		strings.HasPrefix(path, "/notification-tone") ||
 		strings.HasPrefix(path, "/sse/") {
 		return true
@@ -70,6 +71,17 @@ func main() {
 		}
 		// Otherwise, apply JWT middleware
 		return middlewares.NewAuthMiddleware(config.Secret)(c)
+	})
+
+	app.Use("/stream",func(c *fiber.Ctx) error {
+		log.Println("Incoming request:", c.Method(), c.Path())
+		// IsWebSocketUpgrade returns true if the client
+		// requested upgrade to the WebSocket protocol.
+		if websocket.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
 	})
 
 	oauthConf := controller.SetUpOAuth()
@@ -198,8 +210,18 @@ func main() {
 		log.Println("Device ID: ", deviceId)
 		return controller.DeviceSSE(c, redisStore, deviceId)
 	})
+	
+	cfg := websocket.Config{
+		RecoverHandler: func(conn *websocket.Conn) {
+			if err := recover(); err != nil {
+				conn.WriteJSON(fiber.Map{"customError": "error occurred"})
+			}
+		},
+	}
 
-
+	app.Get("/stream", websocket.New(func(c *websocket.Conn) {
+		controller.Stream(c, redisStore)
+	}, cfg))
 
 	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
 }

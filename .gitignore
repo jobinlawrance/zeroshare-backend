@@ -2,3 +2,5 @@
 config/config.go
 ca.crt
 ca.key
+.docker/
+tmp/
