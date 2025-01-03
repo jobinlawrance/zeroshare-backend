@@ -9,3 +9,7 @@ type TokenResponse struct {
 type GoogleTokenResponse struct {
 	Token string `json:"token"`
 }
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}

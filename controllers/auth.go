@@ -15,6 +15,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	jtoken "github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
 	"golang.org/x/oauth2"
@@ -98,7 +99,7 @@ func createZTNetworkAndGetToken(user structs.User, db *gorm.DB) structs.TokenRes
 	// Create token
 	jwtToken := jtoken.NewWithClaims(jtoken.SigningMethodHS256, claims)
 	// Generate encoded token and send it as response.
-	t, err := jwtToken.SignedString([]byte(config.Secret))
+	token, err := jwtToken.SignedString([]byte(config.Secret))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -112,9 +113,25 @@ func createZTNetworkAndGetToken(user structs.User, db *gorm.DB) structs.TokenRes
 		db.Where(structs.User{Email: user.Email}).Updates(structs.User{ZtNetworkId: user.ZtNetworkId})
 	}
 
+	// Set expiration for refresh token (longer-lived)
+	refreshExp := time.Now().Add(time.Hour * 24 * 7)
+
+	// Create the refresh token claims
+	refreshClaims := jtoken.MapClaims{
+		"ID":  user.ID,
+		"exp": refreshExp.Unix(),
+	}
+
+	// Create refresh token
+	jwtRefreshToken := jtoken.NewWithClaims(jtoken.SigningMethodHS256, refreshClaims)
+	refreshToken, err := jwtRefreshToken.SignedString([]byte(config.Secret))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return structs.TokenResponse{
-		AuthToken:   t,
-		RefresToken: "", // You need to provide a value for RefresToken
+		AuthToken:   token,
+		RefresToken: refreshToken, // You need to provide a value for RefresToken
 		ZtNetworkId: user.ZtNetworkId,
 	}
 }
@@ -206,4 +223,46 @@ func GetFromToken(c *fiber.Ctx, key string) (interface{}, error) {
 
 	// Check if the user is an admin
 	return claims[key], nil
+}
+
+func RefreshToken(c *fiber.Ctx, db *gorm.DB, refreshToken string) error {
+	// Validate and parse the refresh token
+	token, err := jtoken.Parse(refreshToken, func(token *jtoken.Token) (interface{}, error) {
+		return []byte(config.Secret), nil
+	})
+	if err != nil || !token.Valid {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid refresh token",
+		})
+	}
+
+	// Extract claims
+	claims, ok := token.Claims.(jtoken.MapClaims)
+	if !ok || claims["ID"] == nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid token claims",
+		})
+	}
+
+	// Generate new tokens
+	userID, err := uuid.Parse(claims["ID"].(string))
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid user ID",
+		})
+	}
+	var user structs.User
+	err = db.Where(structs.User{ID: userID}).First(&user).Error
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User not found",
+		})
+	}
+	if user == (structs.User{}) {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "User not found",
+		})
+	}
+
+	return c.JSON(createZTNetworkAndGetToken(user, db))
 }

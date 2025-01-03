@@ -34,6 +34,7 @@ func shoudSkipPath(c *fiber.Ctx) bool {
 	// Handle dynamic routes manually (e.g., /login/qr/:token)
 	if path == "/oauth/google" || path == "/auth/google/callback" ||
 		strings.HasPrefix(path, "/login/") ||
+		strings.HasPrefix(path, "/refresh") ||
 		strings.HasPrefix(path, "/stream") ||
 		strings.HasPrefix(path, "/notification-tone") ||
 		strings.HasPrefix(path, "/sse/") {
@@ -151,6 +152,12 @@ func main() {
 			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 		}
 		return c.JSON(tokenResponse)
+	})
+
+	app.Post("/refresh", func(c *fiber.Ctx) error {
+		refreshToken := new(structs.RefreshTokenRequest)
+		json.Unmarshal(c.Body(), refreshToken)
+		return controller.RefreshToken(c,DB,refreshToken.RefreshToken)
 	})
 
 	app.Get("/peers", func(c *fiber.Ctx) error {
