@@ -48,9 +48,12 @@ func main() {
 	app.Use(logger.New())
 	app.Static("/assets", "./assets")
 
-	er := godotenv.Load(".env")
-	if er != nil {
-		log.Fatal("Dayum, Error loading .env file:", er)
+	// Load environment variables from .env file if not running in a containerized environment
+	if os.Getenv("APP_ENV") != "production" {
+		err := godotenv.Load(".env")
+		if err != nil {
+			log.Fatal("Dayum, Error loading .env file:", err)
+		}
 	}
 
 	DB = controller.InitDatabase()
@@ -183,6 +186,7 @@ func main() {
 		// TODO, get last public ip
 		signedKey, caCert, incomingSite, err := controller.SignPublicKey(body.PublicKey, body.DeviceId, DB)
 		if err != nil {
+			log.Println(err)
 			return c.Status(500).JSON(fiber.Map{
 				"error": "Failed to sign public key",
 			})
