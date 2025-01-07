@@ -6,11 +6,12 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/contrib/websocket"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -77,7 +78,7 @@ func main() {
 		return middlewares.NewAuthMiddleware(config.Secret)(c)
 	})
 
-	app.Use("/stream",func(c *fiber.Ctx) error {
+	app.Use("/stream", func(c *fiber.Ctx) error {
 		log.Println("Incoming request:", c.Method(), c.Path())
 		// IsWebSocketUpgrade returns true if the client
 		// requested upgrade to the WebSocket protocol.
@@ -160,7 +161,7 @@ func main() {
 	app.Post("/refresh", func(c *fiber.Ctx) error {
 		refreshToken := new(structs.RefreshTokenRequest)
 		json.Unmarshal(c.Body(), refreshToken)
-		return controller.RefreshToken(c,DB,refreshToken.RefreshToken)
+		return controller.RefreshToken(c, DB, refreshToken.RefreshToken)
 	})
 
 	app.Get("/peers", func(c *fiber.Ctx) error {
@@ -210,7 +211,7 @@ func main() {
 		SSEResponse.Type = SSERequest.Type
 		SSEResponse.Data = SSERequest.Data
 		SSEResponse.Device = *device
-		jsonData , _ := json.Marshal(SSEResponse)
+		jsonData, _ := json.Marshal(SSEResponse)
 		log.Println("Device ID: ", deviceId, "User Id:", userId)
 		redisStore.Publish(context.Background(), deviceId, jsonData)
 		return c.SendStatus(fiber.StatusOK)
@@ -221,7 +222,7 @@ func main() {
 		log.Println("Device ID: ", deviceId)
 		return controller.DeviceSSE(c, redisStore, deviceId)
 	})
-	
+
 	cfg := websocket.Config{
 		RecoverHandler: func(conn *websocket.Conn) {
 			if err := recover(); err != nil {
@@ -231,6 +232,26 @@ func main() {
 	}
 
 	app.Get("/stream", websocket.New(func(c *websocket.Conn) {
+		// Ensure the connection is closed properly
+		defer func() {
+			err := c.Close()
+			if err != nil {
+				log.Println("Error closing connection:", err)
+			}
+		}()
+		// Start a ping-pong loop to keep the connection alive
+		go func() {
+			ticker := time.NewTicker(15 * time.Second) // Adjust interval as needed
+			defer ticker.Stop()
+
+			for range ticker.C {
+				if err := c.WriteMessage(websocket.PingMessage, nil); err != nil {
+					log.Println("Error sending ping:", err)
+					return
+				}
+			}
+		}()
+
 		controller.Stream(c, redisStore)
 	}, cfg))
 
