@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -35,6 +37,7 @@ func shoudSkipPath(c *fiber.Ctx) bool {
 	// Handle dynamic routes manually (e.g., /login/qr/:token)
 	if path == "/oauth/google" || path == "/auth/google/callback" ||
 		strings.HasPrefix(path, "/login/") ||
+		strings.HasPrefix(path, "/proxy/") ||
 		strings.HasPrefix(path, "/refresh") ||
 		strings.HasPrefix(path, "/stream") ||
 		strings.HasPrefix(path, "/notification-tone") ||
@@ -132,12 +135,43 @@ func main() {
 	})
 
 	app.Post("/device", func(c *fiber.Ctx) error {
+		log.Println("Request received: ", c.Method())
+		log.Println("Request body: ", string(c.Body())) // Log the raw body
 		response := new(structs.Device)
-		json.Unmarshal(c.Body(), response)
-		userId, _ := controller.GetFromToken(c, "ID")
-		uid, _ := uuid.Parse(userId.(string))
+
+		// Unmarshal the body and handle the error
+		if err := json.Unmarshal(c.Body(), response); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid JSON format",
+			})
+		}
+
+		// Retrieve the user ID from the token
+		userId, err := controller.GetFromToken(c, "ID")
+		if err != nil || userId == nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "User ID not found in token",
+			})
+		}
+
+		// Parse the user ID as UUID
+		uid, err := uuid.Parse(userId.(string))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid User ID format",
+			})
+		}
+
+		// Assign the parsed user ID to the response struct
 		response.UserId = uid
-		DB.Where("device_id = ?", response.DeviceId).FirstOrCreate(&response)
+
+		// Query the database and handle any potential errors
+		if err := DB.Where("device_id = ?", response.DeviceId).FirstOrCreate(&response).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Database error",
+			})
+		}
+
 		return c.SendStatus(fiber.StatusOK)
 	})
 
@@ -254,6 +288,25 @@ func main() {
 
 		controller.Stream(c, redisStore)
 	}, cfg))
+
+	app.Get("/proxy/:baseUrl", func(c *fiber.Ctx) error {
+		encodedId := c.Params("baseUrl")
+
+		// Step 2: Decode the Base64 ID
+		decodedBytes, err := base64.URLEncoding.DecodeString(encodedId)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).SendString("Invalid Base64 encoding")
+		}
+		decodedURL := string(decodedBytes)
+
+		// Step 3: Validate the decoded URL
+		parsedURL, err := url.Parse(decodedURL)
+		if err != nil || !(strings.HasPrefix(parsedURL.Scheme, "http")) {
+			return c.Status(fiber.StatusBadRequest).SendString("Invalid URL")
+		}
+		// Step 4: Redirect to the decoded URL
+		return c.Redirect(decodedURL, fiber.StatusTemporaryRedirect)
+	})
 
 	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
 }
