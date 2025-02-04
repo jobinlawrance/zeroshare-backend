@@ -19,7 +19,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	"zeroshare-backend/config"
 	controller "zeroshare-backend/controllers"
 	"zeroshare-backend/middlewares"
 	"zeroshare-backend/structs"
@@ -78,7 +77,7 @@ func main() {
 			return c.Next()
 		}
 		// Otherwise, apply JWT middleware
-		return middlewares.NewAuthMiddleware(config.Secret)(c)
+		return middlewares.NewAuthMiddleware(os.Getenv("AUTH_SECRET"))(c)
 	})
 
 	app.Use("/stream", func(c *fiber.Ctx) error {
