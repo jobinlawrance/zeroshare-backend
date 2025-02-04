@@ -1,0 +1,3 @@
+zeroshare.jkbx.live {
+        reverse_proxy localhost:3000
+}

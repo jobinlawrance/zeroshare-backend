@@ -1,62 +1,66 @@
 services:
-    jaeger-collector:
-      image: jaegertracing/jaeger-collector
-      command: [
-        "--cassandra.keyspace=jaeger_v1_dc1", 
-        "--cassandra.servers=cassandra",
-        "--sampling.initial-sampling-probability=.5",
-        "--sampling.target-samples-per-second=.01"
-      ]
-      ports:
-        - "14269:16269"
-        - "14268:14268"
-        - "14250"
-        - "9411:9411"
-      restart: on-failure
-      environment:
-        - SAMPLING_CONFIG_TYPE=adaptive
-        - SPAN_STORAGE_TYPE=cassandra
-      depends_on:
-        - cassandra-schema
+  
+  redis:
+    image: docker.io/bitnami/redis:7.4
+    container_name: redis
+    restart: on-failure
+    environment:
+      # ALLOW_EMPTY_PASSWORD is recommended only for development.
+      #- ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PASSWORD=testpass
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    ports:
+      - "6379:6379"
+    volumes:
+      - "redis_data:/bitnami/redis/data"
+    networks:
+      - zeroshare
+  
+  db:
+    image: postgres
+    restart: always
+    container_name: pgdb
+    # set shared memory limit when using docker-compose
+    shm_size: 512mb
+    # or set shared memory limit when deploy via swarm stack
+    #volumes:
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_USER: postgres
+      POSTGRES_DB: zeroshare
+    networks:
+      - zeroshare
 
-    jaeger-query:
-      image: jaegertracing/jaeger-query
-      command: [
-        "--cassandra.keyspace=jaeger_v1_dc1", 
-        "--cassandra.servers=cassandra"
-      ]
-      ports:
-        - "16686:16686"
-        - "16687"
-      restart: on-failure
-      depends_on:
-        - cassandra-schema
+  backend:
+    image: jobinlawrance/zeroshare-backend:1.0.12
+    container_name: backend
+    restart: on-failure
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+      - db
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+    networks:
+      - zeroshare
 
-    jaeger-agent:
-      image: jaegertracing/jaeger-agent
-      command: ["--reporter.grpc.host-port=jaeger-collector:14250"]
-      ports:
-        - "5775:5775/udp"
-        - "6831:6831/udp"
-        - "6832:6832/udp"
-        - "5778:5778/tcp"
-      restart: on-failure
-      depends_on:
-        - jaeger-collector
+volumes:
+  redis_data:
+    driver: local
+  pgdata:
+    driver: local
 
-    cassandra:
-      container_name: cassandra
-      image: cassandra:4.0
-      volumes: 
-        - /var/local/jaeger/cassandra/scheme:/var/lib/cassandra
-      healthcheck:
-        test: ["CMD-SHELL", "[ $$(nodetool statusgossip) = running ]"]
-        interval: 30s
-        timeout: 10s
-        retries: 5
-
-    cassandra-schema:
-      image: jaegertracing/jaeger-cassandra-schema
-      depends_on:
-        cassandra:
-          condition: service_healthy
+networks:
+  zeroshare:
+    external: true
