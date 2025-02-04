@@ -51,6 +51,7 @@ jobs:
           tags: |
             ghcr.io/jobinlawrance/zeroshare-backend:${{ env.VERSION }}
             ghcr.io/jobinlawrance/zeroshare-backend:latest
+          builder: paketobuildpacks/builder-jammy-base
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
