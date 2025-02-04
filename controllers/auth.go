@@ -10,7 +10,6 @@ import (
 	"log"
 	"os"
 	"time"
-	"zeroshare-backend/config"
 	structs "zeroshare-backend/structs"
 
 	"github.com/gofiber/fiber/v2"
@@ -99,7 +98,7 @@ func createZTNetworkAndGetToken(user structs.User, db *gorm.DB) structs.TokenRes
 	// Create token
 	jwtToken := jtoken.NewWithClaims(jtoken.SigningMethodHS256, claims)
 	// Generate encoded token and send it as response.
-	token, err := jwtToken.SignedString([]byte(config.Secret))
+	token, err := jwtToken.SignedString([]byte(os.Getenv("AUTH_SECRET")))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -124,7 +123,7 @@ func createZTNetworkAndGetToken(user structs.User, db *gorm.DB) structs.TokenRes
 
 	// Create refresh token
 	jwtRefreshToken := jtoken.NewWithClaims(jtoken.SigningMethodHS256, refreshClaims)
-	refreshToken, err := jwtRefreshToken.SignedString([]byte(config.Secret))
+	refreshToken, err := jwtRefreshToken.SignedString([]byte(os.Getenv("AUTH_SECRET")))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -212,7 +211,7 @@ func GetFromToken(c *fiber.Ctx, key string) (interface{}, error) {
 		if _, ok := token.Method.(*jtoken.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-		return config.Secret, nil
+		return os.Getenv("AUTH_SECRET"), nil
 	})
 
 	// Extract the claims from the token (assuming it's a map of claims)
@@ -228,7 +227,7 @@ func GetFromToken(c *fiber.Ctx, key string) (interface{}, error) {
 func RefreshToken(c *fiber.Ctx, db *gorm.DB, refreshToken string) error {
 	// Validate and parse the refresh token
 	token, err := jtoken.Parse(refreshToken, func(token *jtoken.Token) (interface{}, error) {
-		return []byte(config.Secret), nil
+		return []byte(os.Getenv("AUTH_SECRET")), nil
 	})
 	if err != nil || !token.Valid {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
