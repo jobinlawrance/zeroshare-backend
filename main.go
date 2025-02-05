@@ -115,24 +115,6 @@ func main() {
 		return controller.GetAuthData(c, oauthConf, DB, redisStore)
 	})
 
-	app.Post("/node", func(c *fiber.Ctx) error {
-		response := new(structs.NodeResponse)
-		json.Unmarshal(c.Body(), response)
-		userId, _ := controller.GetFromToken(c, "ID")
-		uid, _ := uuid.Parse(userId.(string))
-		peer := structs.Peer{
-			MachineName: response.MachineName,
-			NetworkId:   response.NetworkId,
-			NodeId:      response.NodeId,
-			UserId:      uid,
-			Platform:    response.Platform,
-		}
-
-		controller.AddPeerAndAuthorize(context.Background(), peer, DB)
-
-		return c.SendStatus(fiber.StatusOK)
-	})
-
 	app.Post("/device", func(c *fiber.Ctx) error {
 		log.Println("Request received: ", c.Method())
 		log.Println("Request body: ", string(c.Body())) // Log the raw body
@@ -195,15 +177,6 @@ func main() {
 		refreshToken := new(structs.RefreshTokenRequest)
 		json.Unmarshal(c.Body(), refreshToken)
 		return controller.RefreshToken(c, DB, refreshToken.RefreshToken)
-	})
-
-	app.Get("/peers", func(c *fiber.Ctx) error {
-		userId, _ := controller.GetFromToken(c, "ID")
-		members, err := controller.FetchAllMembers(context.Background(), c.Query("networkId"), userId.(string), DB)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
-		}
-		return c.JSON(members)
 	})
 
 	app.Post("/nebula/sign-public-key", func(c *fiber.Ctx) error {

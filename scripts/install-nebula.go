@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/urfave/cli/v2"
 	"github.com/schollz/progressbar/v3"
+	"github.com/urfave/cli/v2"
 )
 
 type GithubAsset struct {
@@ -25,11 +25,11 @@ type GithubAsset struct {
 }
 
 type GithubReleaseResponse struct {
-	Name   string          `json:"name"`
+	Name   string        `json:"name"`
 	Assets []GithubAsset `json:"assets"`
 }
 
-func main() {
+func install_nebula() {
 	app := &cli.App{
 		Name:  "Nebula Installer",
 		Usage: "Download and install the latest Nebula binary for your system",
@@ -89,7 +89,7 @@ func main() {
 			}
 
 			fmt.Println("Installation complete.")
-			return nil
+			return err
 		},
 	}
 
@@ -147,7 +147,7 @@ func findMatchingAsset(release *GithubReleaseResponse, osName, arch string) (*Gi
 	if len(osAssets) == 0 {
 		return nil, fmt.Errorf("no matching asset found for OS: %s", osName)
 	}
-	
+
 	// If only one asset matches the OS, return it
 	if len(osAssets) == 1 {
 		return &osAssets[0], nil

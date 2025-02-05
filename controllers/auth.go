@@ -103,15 +103,6 @@ func createZTNetworkAndGetToken(user structs.User, db *gorm.DB) structs.TokenRes
 		log.Fatal(err)
 	}
 
-	if user.ZtNetworkId == "" {
-		nwid, err := CreateNewZTNetwork(context.Background(), user.Name)
-		if err != nil {
-			log.Fatal(err)
-		}
-		user.ZtNetworkId = nwid
-		db.Where(structs.User{Email: user.Email}).Updates(structs.User{ZtNetworkId: user.ZtNetworkId})
-	}
-
 	// Set expiration for refresh token (longer-lived)
 	refreshExp := time.Now().Add(time.Hour * 24 * 7)
 
@@ -131,12 +122,11 @@ func createZTNetworkAndGetToken(user structs.User, db *gorm.DB) structs.TokenRes
 	return structs.TokenResponse{
 		AuthToken:   token,
 		RefresToken: refreshToken, // You need to provide a value for RefresToken
-		ZtNetworkId: user.ZtNetworkId,
 	}
 }
 
 func GetAuthDataFromGooglePayload(token string, db *gorm.DB) (structs.TokenResponse, error) {
-	payload, err := idToken.Validate(context.Background(), token, os.Getenv("GOOGLE_CLIENT_ID"))
+	payload, err := idToken.Validate(context.Background(), token, os.Getenv("CLIENT_ID"))
 	if err != nil {
 		log.Println(err)
 		return structs.TokenResponse{}, err

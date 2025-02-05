@@ -1,0 +1,68 @@
+services:
+  
+  redis:
+    image: docker.io/bitnami/redis:7.4
+    container_name: redis
+    restart: on-failure
+    environment:
+      # ALLOW_EMPTY_PASSWORD is recommended only for development.
+      #- ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PASSWORD=testpass
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    ports:
+      - "6379:6379"
+    volumes:
+      - "redis_data:/bitnami/redis/data"
+    networks:
+      - zeroshare
+  
+  db:
+    image: postgres
+    restart: always
+    container_name: db
+    # set shared memory limit when using docker-compose
+    shm_size: 512mb
+    # or set shared memory limit when deploy via swarm stack
+    #volumes:
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_USER: postgres
+      POSTGRES_DB: zeroshare
+    networks:
+      - zeroshare
+
+  backend:
+    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.8
+    container_name: backend
+    restart: on-failure
+    ports:
+      - "4000:4000"
+    depends_on:
+      - redis
+      - db
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+    volumes:
+      - /usr/local/bin:/usr/local/bin
+    networks:
+      - zeroshare
+
+volumes:
+  redis_data:
+    driver: local
+  pgdata:
+    driver: local
+
+networks:
+  zeroshare:
+    driver: bridge

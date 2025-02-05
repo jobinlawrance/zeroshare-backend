@@ -19,7 +19,7 @@ services:
   db:
     image: postgres
     restart: always
-    container_name: pgdb
+    container_name: db
     # set shared memory limit when using docker-compose
     shm_size: 512mb
     # or set shared memory limit when deploy via swarm stack
@@ -40,7 +40,7 @@ services:
       - zeroshare
 
   backend:
-    image: jobinlawrance/zeroshare-backend:1.0.12
+    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.12
     container_name: backend
     restart: on-failure
     ports:
@@ -63,4 +63,4 @@ volumes:
 
 networks:
   zeroshare:
-    external: true
+    driver: bridge
