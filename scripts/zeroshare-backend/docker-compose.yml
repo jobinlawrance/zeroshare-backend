@@ -40,7 +40,7 @@ services:
       - zeroshare
 
   backend:
-    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.8
+    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.9
     container_name: backend
     restart: on-failure
     ports:
@@ -53,7 +53,9 @@ services:
     environment:
       - APP_ENV=production
     volumes:
-      - /usr/local/bin:/usr/local/bin
+      - /usr/local/bin/nebula:/usr/local/bin/nebula:rx
+      - /usr/local/bin/nebula-cert:/usr/local/bin/nebula-cert:rx
+    user: "root"
     networks:
       - zeroshare
 
