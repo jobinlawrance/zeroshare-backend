@@ -44,7 +44,7 @@ services:
     container_name: backend
     restart: on-failure
     ports:
-      - "3000:3000"
+      - "4000:4000"
     depends_on:
       - redis
       - db
@@ -52,6 +52,8 @@ services:
       - .env
     environment:
       - APP_ENV=production
+    volumes:
+      - /usr/local/bin:/usr/local/bin
     networks:
       - zeroshare
 
