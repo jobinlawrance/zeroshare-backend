@@ -22,8 +22,7 @@ import (
 	controller "zeroshare-backend/controllers"
 	"zeroshare-backend/middlewares"
 	"zeroshare-backend/structs"
-
-	pb "zeroshare-backend/proto"
+	// pb "zeroshare-backend/proto"
 )
 
 var DB *gorm.DB
@@ -60,7 +59,7 @@ func main() {
 	}
 
 	DB = controller.InitDatabase()
-	go pb.StartGRPCServer(DB)
+	// go pb.StartGRPCServer(DB)
 
 	controller.InitNebula(context.Background())
 

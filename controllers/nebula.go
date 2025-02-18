@@ -16,20 +16,23 @@ import (
 
 func InitNebula(ctx context.Context) {
 	// Paths to the CA certificate and key files
-	caCrtPath := "ca.crt"
-	caKeyPath := "ca.key"
+	caCrtPath := "./certs/ca.crt"
+	caKeyPath := "./certs/ca.key"
+
+	log.Printf("InitNebula")
 
 	// Check if both files exist
 	if !fileExists(caCrtPath) || !fileExists(caKeyPath) {
+		log.Printf("InitNebula: No CA cert or key found, generating new ones")
 		cmd := exec.Command("./bin/nebula-cert", "ca", "--name", "ZeroShare, Inc")
 		// Capture the output
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			// Handle the error
-			panic(err)
+			log.Panic(err)
 		}
 		// Print the output
-		println(string(output))
+		log.Printf("%s", string(output))
 	}
 }
 
