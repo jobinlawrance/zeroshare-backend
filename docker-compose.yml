@@ -15,6 +15,12 @@ services:
       - "redis_data:/bitnami/redis/data"
     networks:
       - zeroshare
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
   
   db:
     image: postgres
@@ -29,31 +35,66 @@ services:
     #    tmpfs:
     #      size: 134217728 # 128*2^20 bytes = 128Mb
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     environment:
       POSTGRES_PASSWORD: root
       POSTGRES_USER: postgres
       POSTGRES_DB: zeroshare
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - zeroshare
 
   backend:
-    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.12
+    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.15
     container_name: backend
     restart: on-failure
     ports:
       - "4000:4000"
     depends_on:
-      - redis
-      - db
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      nebula-lighthouse:
+        condition: service_healthy
+        
     env_file:
       - .env
     environment:
       - APP_ENV=production
     volumes:
-      - /usr/local/bin:/usr/local/bin
+      - ./bin:/app/bin     # Changed from /bin to /app/bin
+      - ./certs:/app/certs # Changed from /certs to /app/certs
+    networks:
+      - zeroshare
+
+  nebula-lighthouse:
+    image: debian:bullseye-slim
+    container_name: nebula-lighthouse
+    healthcheck:
+      test: ["CMD", "test", "-f", "/shared-bin/nebula-cert"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - ./certs:/certs
+      - ./config:/config
+      - ./bin:/shared-bin
+      - ./scripts:/scripts
+    entrypoint: ["/scripts/start-lighthouse.sh"]
+    ports:
+      - "4242:4242/udp"
+    cap_add:
+      - NET_ADMIN
+    restart: always
     networks:
       - zeroshare
 
