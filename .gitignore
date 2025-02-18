@@ -5,3 +5,4 @@ ca.key
 .docker/
 tmp/
 main
+certs/

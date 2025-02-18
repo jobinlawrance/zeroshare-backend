@@ -21,8 +21,7 @@ func InitNebula(ctx context.Context) {
 
 	// Check if both files exist
 	if !fileExists(caCrtPath) || !fileExists(caKeyPath) {
-		// Use full path to nebula-cert
-		cmd := exec.Command("/usr/local/bin/nebula-cert", "ca", "--name", "ZeroShare, Inc")
+		cmd := exec.Command("./bin/nebula-cert", "ca", "--name", "ZeroShare, Inc")
 		// Capture the output
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -74,7 +73,7 @@ func SignPublicKey(publicKey string, deviceId string, db *gorm.DB) (string, stri
 
 	certName := fmt.Sprintf("%s.neb.jkbx.live", uid)
 	// Use full path to nebula-cert
-	cmd := exec.Command("/usr/local/bin/nebula-cert", "sign", "-in-pub", fileName, "-name", certName, "-ip", ipWithCIDR)
+	cmd := exec.Command("./bin/nebula-cert", "sign", "-in-pub", fileName, "-name", certName, "-ip", ipWithCIDR)
 	_, err = cmd.CombinedOutput()
 	if err != nil {
 		return "", "", map[string]interface{}{}, err
