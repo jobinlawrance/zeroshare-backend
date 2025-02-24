@@ -52,7 +52,7 @@ services:
       - zeroshare
 
   backend:
-    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.15
+    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.18
     container_name: backend
     restart: on-failure
     ports:

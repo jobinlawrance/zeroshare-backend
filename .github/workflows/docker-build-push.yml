@@ -97,8 +97,8 @@ jobs:
             - `ghcr.io/jobinlawrance/zeroshare-backend:latest`
 
             ## Docs  
-            For further insat
+            For further installation check the docs at [ZeroShare Docs](https://zeroshare.jkbx.live/docs)
             
           draft: false
           prerelease: false
-          make_latest: true
+          generate_release_notes: false
