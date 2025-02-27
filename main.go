@@ -10,19 +10,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	fiberrecover "github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	slogfiber "github.com/samber/slog-fiber"
+
 	"gorm.io/gorm"
 
 	controller "zeroshare-backend/controllers"
 	"zeroshare-backend/middlewares"
 	"zeroshare-backend/structs"
-	// pb "zeroshare-backend/proto"
 )
 
 var DB *gorm.DB
@@ -46,10 +48,6 @@ func shoudSkipPath(c *fiber.Ctx) bool {
 }
 
 func main() {
-	app := fiber.New()
-	app.Use(logger.New())
-	app.Static("/assets", "./assets")
-
 	// Load environment variables from .env file if not running in a containerized environment
 	if os.Getenv("APP_ENV") != "production" {
 		err := godotenv.Load(".env")
@@ -57,6 +55,34 @@ func main() {
 			log.Fatal("Dayum, Error loading .env file:", err)
 		}
 	}
+
+	tracer, logProvider, metricProvider := controller.InitOpenTelemetry(context.Background())
+
+	defer func() {
+		if err := tracer.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+		if err := logProvider.Shutdown(context.Background()); err != nil {
+			log.Println(err)
+		}
+		if err := metricProvider.Shutdown(context.Background()); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	app := fiber.New()
+
+	app.Use(otelfiber.Middleware())
+
+	logger, config := controller.InitSlog(logProvider)
+	app.Use(slogfiber.NewWithConfig(
+		logger,
+		config,
+	))
+
+	app.Use(fiberrecover.New())
+
+	app.Static("/assets", "./assets")
 
 	DB = controller.InitDatabase()
 	// go pb.StartGRPCServer(DB)
@@ -115,8 +141,6 @@ func main() {
 	})
 
 	app.Post("/device", func(c *fiber.Ctx) error {
-		log.Println("Request received: ", c.Method())
-		log.Println("Request body: ", string(c.Body())) // Log the raw body
 		response := new(structs.Device)
 
 		// Unmarshal the body and handle the error
