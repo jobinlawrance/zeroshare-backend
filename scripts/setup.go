@@ -4,16 +4,17 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
+
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
-	"regexp"
+
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/urfave/cli/v2"
 )
 
@@ -68,41 +69,62 @@ func main() {
 				return fmt.Errorf("failed to read compose file: %v", err)
 			}
 
-			// Get latest tag
-			tagResp, err := http.Get("https://api.github.com/repos/jobinlawrance/zeroshare-backend/tags")
-			if err != nil {
-				return fmt.Errorf("failed to get tags: %v", err)
-			}
-			defer tagResp.Body.Close()
-
-			var tags []Tag
-			if err := json.NewDecoder(tagResp.Body).Decode(&tags); err != nil {
-				return fmt.Errorf("failed to decode tags: %v", err)
-			}
-
-			if len(tags) == 0 {
-				return fmt.Errorf("no tags found")
-			}
-
-			version := strings.TrimPrefix(tags[0].Name, "v")
-
-			// Update compose file with correct version
-			re := regexp.MustCompile(`image: ghcr.io/jobinlawrance/zeroshare-backend:[^\s]*`)
-			updatedCompose := re.ReplaceAllString(
-				string(composeContent),
-				fmt.Sprintf("image: ghcr.io/jobinlawrance/zeroshare-backend:%s", version),
-			)
-
-			err = os.WriteFile("docker-compose.yml", []byte(updatedCompose), 0644)
-			if err != nil {
-				return fmt.Errorf("failed to write compose file: %v", err)
-			}
-
 			// Get user input using the new function
 			orgName := readInput("Enter Organization Name: ")
 			clientID := readInput("Enter Google Client ID: ")
 			clientSecret := readInput("Enter Google Client Secret: ")
-			redirectURI := readInput("Enter Redirect URI: ")
+
+			// Ask about observability
+			enableObservability := strings.ToLower(readInput("Do you want to enable Observability (Logs, Traces & Metrics)? (yes/no): "))
+
+			otelMetrics := "false"
+			otelLogs := "false"
+			otelTracing := "false"
+
+			if enableObservability == "yes" || enableObservability == "y" {
+				otelMetrics = "true"
+				otelLogs = "true"
+				otelTracing = "true"
+
+				// Ask about setup type
+				setupType := strings.ToLower(readInput("Do you want a permanent (prod) or temporary (dev) setup? (prod/dev): "))
+
+				// Create otel directory structure for prod setup
+				if setupType == "prod" {
+					err := os.MkdirAll("otel/clickhouse-init", 0755)
+					if err != nil {
+						return fmt.Errorf("failed to create otel directories: %v", err)
+					}
+
+					// Download and save otel configuration files
+					files := map[string]string{
+						"otel/datasource.yaml":             "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/datasource.yaml",
+						"otel/grafana.ini":                 "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/grafana.ini",
+						"otel/otel-collector-config.yaml":  "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/otel-collector-config.yaml",
+						"otel/clickhouse-init/init-db.sql": "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/clickhouse-init/init-db.sql",
+					}
+
+					for filePath, url := range files {
+						if err := downloadFile(url, filePath); err != nil {
+							return fmt.Errorf("failed to download %s: %v", filePath, err)
+						}
+					}
+				}
+
+				// Update compose file based on setup type
+				updatedContent := updateComposeFile(string(composeContent), setupType)
+				composeContent = []byte(updatedContent)
+			} else {
+				// Comment out all observability services if not enabled
+				updatedContent := updateComposeFile(string(composeContent), "none")
+				composeContent = []byte(updatedContent)
+			}
+
+			// Update the compose file
+			err = os.WriteFile("docker-compose.yml", []byte(composeContent), 0644)
+			if err != nil {
+				return fmt.Errorf("failed to write compose file: %v", err)
+			}
 
 			// Generate auth secret
 			authSecret := generateAuthSecret(30)
@@ -117,7 +139,7 @@ func main() {
 				}
 			}
 
-			// Create .env file
+			// Create .env file with updated OTEL settings
 			envContent := fmt.Sprintf(`PORT=4000
 DB_HOST=db       
 DB_USER=postgres
@@ -130,9 +152,13 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 CLIENT_ID=%s
 CLIENT_SECRET=%s
-REDIRECT_URL=%s
+REDIRECT_URL=http://localhost:4000/auth/google/callback
 AUTH_SECRET=%s
-`, timezoneName, clientID, clientSecret, redirectURI, authSecret)
+OTEL_METRICS_ENABLED=%s
+OTEL_LOGS_ENABLED=%s
+OTEL_TRACING_ENABLED=%s
+OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
+`, timezoneName, clientID, clientSecret, authSecret, otelMetrics, otelLogs, otelTracing)
 
 			err = os.WriteFile(".env", []byte(envContent), 0644)
 			if err != nil {
@@ -219,4 +245,69 @@ type GithubAsset struct {
 type GithubReleaseResponse struct {
 	Name   string        `json:"name"`
 	Assets []GithubAsset `json:"assets"`
+}
+
+// New helper functions
+func downloadFile(url, filepath string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath, content, 0644)
+}
+
+func updateComposeFile(content, setupType string) string {
+	var composeConfig map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &composeConfig); err != nil {
+		return content
+	}
+
+	services := composeConfig["services"].(map[string]interface{})
+	observabilityServices := []string{"jaeger", "clickhouse", "otel-collector", "grafana"}
+
+	// Create a copy of the original compose file
+	var baseConfig map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &baseConfig); err != nil {
+		return content
+	}
+
+	// Handle observability services based on setup type
+	switch setupType {
+	case "prod":
+		// Remove jaeger, keep other observability services
+		delete(services, "jaeger")
+	case "dev":
+		// Keep only jaeger, remove other observability services
+		for _, service := range observabilityServices {
+			if service != "jaeger" {
+				delete(services, service)
+			}
+		}
+	case "none":
+		// Remove all observability services
+		for _, service := range observabilityServices {
+			delete(services, service)
+		}
+	}
+
+	// Update the services in the config
+	composeConfig["services"] = services
+
+	updatedContent, err := yaml.Marshal(composeConfig)
+	if err != nil {
+		return content
+	}
+
+	return string(updatedContent)
 }
