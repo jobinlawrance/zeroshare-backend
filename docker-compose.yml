@@ -51,95 +51,110 @@ services:
     networks:
       - zeroshare
 
-  # backend:
-  #   image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.18
-  #   container_name: backend
-  #   restart: on-failure
-  #   ports:
-  #     - "4000:4000"
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #     db:
-  #       condition: service_healthy
-  #     nebula-lighthouse:
-  #       condition: service_healthy 
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - APP_ENV=production
-  #   volumes:
-  #     - ./bin:/app/bin     # Changed from /bin to /app/bin
-  #     - ./certs:/app/certs # Changed from /certs to /app/certs
-  #   networks:
-  #     - zeroshare
-
-  # nebula-lighthouse:
-  #   image: debian:bullseye-slim
-  #   container_name: nebula-lighthouse
-  #   healthcheck:
-  #     test: ["CMD", "test", "-f", "/shared-bin/nebula-cert"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 3
-  #     start_period: 10s
-  #   volumes:
-  #     - ./certs:/certs
-  #     - ./config:/config
-  #     - ./bin:/shared-bin
-  #     - ./scripts:/scripts
-  #   entrypoint: ["/scripts/start-lighthouse.sh"]
-  #   ports:
-  #     - "4242:4242/udp"
-  #   cap_add:
-  #     - NET_ADMIN
-  #   restart: always
-  #   networks:
-  #     - zeroshare
-
-  otel-collector:
-    container_name: otel-collector
-    image: otel/opentelemetry-collector-contrib
-    volumes:
-      - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+  backend:
+    image: ghcr.io/jobinlawrance/zeroshare-backend:1.0.18
+    container_name: backend
+    restart: on-failure
     ports:
-      - 1888:1888 # pprof extension
-      - 8888:8888 # Prometheus metrics exposed by the Collector
-      - 8889:8889 # Prometheus exporter metrics
-      - 13133:13133 # health_check extension
-      - 4317:4317 # OTLP gRPC receiver
-      - 4318:4318 # OTLP http receiver
-      - 55679:55679 # zpages extension
-    networks:
-      - zeroshare
+      - "4000:4000"
     depends_on:
-      - clickhouse
-
-  clickhouse:
-    container_name: clickhouse
-    image: clickhouse/clickhouse-server:latest
-    volumes:
-      - ./otel/clickhouse-init:/docker-entrypoint-initdb.d
-    ports:
-      - "9000:9000"
-      - "8123:8123"
-    networks:
-      - zeroshare
-
-  grafana:
-    container_name: grafana
-    image: grafana/grafana:latest
-    volumes:
-      - ./otel/grafana.ini:/etc/grafana/grafana.ini
-      - ./otel/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      nebula-lighthouse:
+        condition: service_healthy 
+    env_file:
+      - .env
     environment:
-      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
-    ports:
-      - "3001:3000"
+      - APP_ENV=production
+    volumes:
+      - ./bin:/app/bin     # Changed from /bin to /app/bin
+      - ./certs:/app/certs # Changed from /certs to /app/certs
     networks:
       - zeroshare
-    depends_on:
-      - clickhouse
+
+  nebula-lighthouse:
+    image: debian:bullseye-slim
+    container_name: nebula-lighthouse
+    healthcheck:
+      test: ["CMD", "test", "-f", "/shared-bin/nebula-cert"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - ./certs:/certs
+      - ./config:/config
+      - ./bin:/shared-bin
+      - ./scripts:/scripts
+    entrypoint: ["/scripts/start-lighthouse.sh"]
+    ports:
+      - "4242:4242/udp"
+    cap_add:
+      - NET_ADMIN
+    restart: always
+    networks:
+      - zeroshare
+
+  # otel-collector:
+  #   container_name: otel-collector
+  #   image: otel/opentelemetry-collector-contrib
+  #   volumes:
+  #     - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+  #   ports:
+  #     - 1888:1888 # pprof extension
+  #     - 8888:8888 # Prometheus metrics exposed by the Collector
+  #     - 8889:8889 # Prometheus exporter metrics
+  #     - 13133:13133 # health_check extension
+  #     - 4317:4317 # OTLP gRPC receiver
+  #     - 4318:4318 # OTLP http receiver
+  #     - 55679:55679 # zpages extension
+  #   networks:
+  #     - zeroshare
+  #   depends_on:
+  #     - clickhouse
+
+  # clickhouse:
+  #   container_name: clickhouse
+  #   image: clickhouse/clickhouse-server:latest
+  #   volumes:
+  #     - ./otel/clickhouse-init:/docker-entrypoint-initdb.d
+  #   ports:
+  #     - "9000:9000"
+  #     - "8123:8123"
+  #   networks:
+  #     - zeroshare
+
+  # grafana:
+  #   container_name: grafana
+  #   image: grafana/grafana:latest
+  #   volumes:
+  #     - ./otel/grafana.ini:/etc/grafana/grafana.ini
+  #     - ./otel/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+  #   environment:
+  #     GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+  #   ports:
+  #     - "3001:3000"
+  #   networks:
+  #     - zeroshare
+  #   depends_on:
+  #     - clickhouse
+
+  jaeger:
+    image: jaegertracing/jaeger:2.3.0
+    container_name: jaeger
+    restart: unless-stopped
+    environment:
+        - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+      - "5778:5778"
+      - "9411:9411"
+    networks: 
+      - zeroshare
 
 volumes:
   redis_data:

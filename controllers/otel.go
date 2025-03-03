@@ -45,23 +45,21 @@ func initTracer(ctx context.Context, resource *resource.Resource, otelendpoint s
 		log.Panic(err)
 	}
 
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithResource(resource),
-		sdktrace.WithBatcher(exp),
-	)
+	var tp *sdktrace.TracerProvider
+	if os.Getenv("OTEL_TRACING_ENABLED") == "true" {
+		tp = sdktrace.NewTracerProvider(
+			sdktrace.WithSampler(sdktrace.AlwaysSample()),
+			sdktrace.WithResource(resource),
+			sdktrace.WithBatcher(exp),
+		)
+	} else {
+		tp = sdktrace.NewTracerProvider(
+			sdktrace.WithResource(resource),
+		)
+	}
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	return tp
-}
-
-func newResource() (*resource.Resource, error) {
-	return resource.Merge(resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("zeroshare-backend"),
-			semconv.ServiceVersionKey.String("0.1.0"),
-		))
 }
 
 func initLogProvider(ctx context.Context, res *resource.Resource, otelendpoint string) *otellog.LoggerProvider {
@@ -73,12 +71,29 @@ func initLogProvider(ctx context.Context, res *resource.Resource, otelendpoint s
 	if err != nil {
 		log.Panic("failed to create exporter:", err)
 	}
-	processor := otellog.NewBatchProcessor(exporter)
-	provider := otellog.NewLoggerProvider(
-		otellog.WithResource(res),
-		otellog.WithProcessor(processor),
-	)
+
+	var provider *otellog.LoggerProvider
+	if os.Getenv("OTEL_LOGS_ENABLED") == "true" {
+		processor := otellog.NewBatchProcessor(exporter)
+		provider = otellog.NewLoggerProvider(
+			otellog.WithResource(res),
+			otellog.WithProcessor(processor),
+		)
+	} else {
+		provider = otellog.NewLoggerProvider(
+			otellog.WithResource(res),
+		)
+	}
 	return provider
+}
+
+func newResource() (*resource.Resource, error) {
+	return resource.Merge(resource.Default(),
+		resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("zeroshare-backend"),
+			semconv.ServiceVersionKey.String("0.1.0"),
+		))
 }
 
 func initMetricProvider(ctx context.Context, res *resource.Resource, otelendpoint string) *metric.MeterProvider {
@@ -91,12 +106,19 @@ func initMetricProvider(ctx context.Context, res *resource.Resource, otelendpoin
 		log.Panic("failed to create metrics exporter:", err)
 	}
 
-	mp := metric.NewMeterProvider(
-		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(exp,
-			metric.WithInterval(10*time.Second),
-		)),
-	)
+	var mp *metric.MeterProvider
+	if os.Getenv("OTEL_METRICS_ENABLED") == "true" {
+		mp = metric.NewMeterProvider(
+			metric.WithResource(res),
+			metric.WithReader(metric.NewPeriodicReader(exp,
+				metric.WithInterval(10*time.Second),
+			)),
+		)
+	} else {
+		mp = metric.NewMeterProvider(
+			metric.WithResource(res),
+		)
+	}
 	otel.SetMeterProvider(mp)
 	return mp
 }
