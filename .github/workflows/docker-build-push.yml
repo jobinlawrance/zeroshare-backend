@@ -70,22 +70,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Build setup binaries
-        run: |
-          # Build for macOS (both Intel and Apple Silicon)
-          GOOS=darwin GOARCH=amd64 go build -o setup-darwin-amd64 ./scripts/setup.go
-          GOOS=darwin GOARCH=arm64 go build -o setup-darwin-arm64 ./scripts/setup.go
-          # Build for Linux
-          GOOS=linux GOARCH=amd64 go build -o setup-linux-amd64 ./scripts/setup.go
-          GOOS=linux GOARCH=arm64 go build -o setup-linux-arm64 ./scripts/setup.go
-          # Build for Windows
-          GOOS=windows GOARCH=amd64 go build -o setup-windows-amd64.exe ./scripts/setup.go
-
       - name: Get previous tag
         id: previoustag
         run: |
@@ -112,22 +96,9 @@ jobs:
             - `ghcr.io/jobinlawrance/zeroshare-backend:${{ github.ref_name }}`
             - `ghcr.io/jobinlawrance/zeroshare-backend:latest`
 
-            ## Setup Binaries
-            - `setup-darwin-arm64`: macOS (Apple Silicon)
-            - `setup-darwin-amd64`: macOS (Intel)
-            - `setup-linux-amd64`: Linux (x64)
-            - `setup-linux-arm64`: Linux (ARM64)
-            - `setup-windows-amd64.exe`: Windows (x64)
-
             ## Docs  
             For further installation check the docs at [ZeroShare Docs](https://zeroshare.jkbx.live/docs)
           
-          files: |
-            setup-darwin-amd64
-            setup-darwin-arm64
-            setup-linux-amd64
-            setup-linux-arm64
-            setup-windows-amd64.exe
           draft: false
           prerelease: false
           generate_release_notes: false
