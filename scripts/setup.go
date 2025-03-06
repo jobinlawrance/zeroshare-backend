@@ -80,10 +80,9 @@ func main() {
 			otelMetrics := "false"
 			otelLogs := "false"
 			otelTracing := "false"
+			otelEndpoint := "localhost"
 
 			if enableObservability == "yes" || enableObservability == "y" {
-				otelMetrics = "true"
-				otelLogs = "true"
 				otelTracing = "true"
 
 				// Ask about setup type
@@ -91,6 +90,9 @@ func main() {
 
 				// Create otel directory structure for prod setup
 				if setupType == "prod" {
+					otelEndpoint = "otel-ccllector"
+					otelMetrics = "true"
+					otelLogs = "true"
 					err := os.MkdirAll("otel/clickhouse-init", 0755)
 					if err != nil {
 						return fmt.Errorf("failed to create otel directories: %v", err)
@@ -109,6 +111,8 @@ func main() {
 							return fmt.Errorf("failed to download %s: %v", filePath, err)
 						}
 					}
+				} else {
+					otelEndpoint = "jaeger"
 				}
 
 				// Update compose file based on setup type
@@ -157,8 +161,8 @@ AUTH_SECRET=%s
 OTEL_METRICS_ENABLED=%s
 OTEL_LOGS_ENABLED=%s
 OTEL_TRACING_ENABLED=%s
-OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
-`, timezoneName, clientID, clientSecret, authSecret, otelMetrics, otelLogs, otelTracing)
+OTEL_EXPORTER_OTLP_ENDPOINT=%s:4317
+`, timezoneName, clientID, clientSecret, authSecret, otelMetrics, otelLogs, otelTracing, otelEndpoint)
 
 			err = os.WriteFile(".env", []byte(envContent), 0644)
 			if err != nil {

@@ -63,14 +63,15 @@ services:
       db:
         condition: service_healthy
       nebula-lighthouse:
-        condition: service_healthy 
+        condition: service_healthy
+
     env_file:
       - .env
     environment:
       - APP_ENV=production
     volumes:
-      - ./bin:/app/bin     # Changed from /bin to /app/bin
-      - ./certs:/app/certs # Changed from /certs to /app/certs
+      - ./bin:/app/bin
+      - ./certs:/app/certs
     networks:
       - zeroshare
 
@@ -78,11 +79,11 @@ services:
     image: debian:bullseye-slim
     container_name: nebula-lighthouse
     healthcheck:
-      test: ["CMD", "test", "-f", "/shared-bin/nebula-cert"]
+      test: ["CMD", "test", "-f", "/shared-bin/nebula-cert" ]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
     volumes:
       - ./certs:/certs
       - ./config:/config
