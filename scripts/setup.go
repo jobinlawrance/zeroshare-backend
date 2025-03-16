@@ -58,7 +58,7 @@ func main() {
 			}
 
 			// Download compose file
-			resp, err := http.Get("https://raw.githubusercontent.com/jobinlawrance/zeroshare-backend/main/docker-compose.yml")
+			resp, err := http.Get("https://raw.githubusercontent.com/jobinlawrance/zeroshare-backend/refs/heads/main/docker-compose.uncommented.yml")
 			if err != nil {
 				return fmt.Errorf("failed to download compose file: %v", err)
 			}
