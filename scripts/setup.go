@@ -90,7 +90,7 @@ func main() {
 
 				// Create otel directory structure for prod setup
 				if setupType == "prod" {
-					otelEndpoint = "otel-ccllector"
+					otelEndpoint = "otel-collector"
 					otelMetrics = "true"
 					otelLogs = "true"
 					err := os.MkdirAll("otel/clickhouse-init", 0755)
