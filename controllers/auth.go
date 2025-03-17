@@ -17,6 +17,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
+	otel "go.opentelemetry.io/otel"
+	attribute "go.opentelemetry.io/otel/attribute"
+	codes "go.opentelemetry.io/otel/codes"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	idToken "google.golang.org/api/idtoken"
@@ -148,6 +151,17 @@ func GetAuthDataFromGooglePayload(token string, db *gorm.DB) (structs.TokenRespo
 }
 
 func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
+	// Start a new span for the SSE connection
+	ctx := context.Background()
+	tracer := otel.Tracer("zeroshare/controllers")
+	ctx, span := tracer.Start(ctx, "SSE.Connection")
+	defer span.End()
+
+	// Add attributes to the span
+	span.SetAttributes(
+		attribute.String("session_token", sessionToken),
+		attribute.String("connection_type", "sse"),
+	)
 
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
@@ -159,9 +173,15 @@ func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
 	// Listen for messages on the Redis channel and send them as SSE
 	c.Status(fiber.StatusOK).Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		for {
-			msg, err := subscriber.ReceiveMessage(context.Background())
+			// Create a child span for each message received
+			msgCtx, msgSpan := tracer.Start(ctx, "SSE.ReceiveMessage")
+
+			msg, err := subscriber.ReceiveMessage(msgCtx)
 			if err != nil {
+				msgSpan.SetStatus(codes.Error, err.Error())
+				msgSpan.RecordError(err)
 				log.Printf("Error receiving message: %v", err)
+				msgSpan.End()
 				break
 			}
 
@@ -169,19 +189,26 @@ func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
 			log.Printf("Sending SSE event to client: %s", sessionToken)
 			data := fmt.Sprintf("data: %s\n\n", msg.Payload)
 
-			log.Printf("Payload: %s", msg.Payload)
-
 			// Write data to the stream
 			if _, err := w.WriteString(data); err != nil {
+				msgSpan.SetStatus(codes.Error, err.Error())
+				msgSpan.RecordError(err)
 				log.Printf("Error writing to stream: %v", err)
+				msgSpan.End()
 				break
 			}
 
 			// Flush the response to send the data immediately
 			if err := w.Flush(); err != nil {
+				msgSpan.SetStatus(codes.Error, err.Error())
+				msgSpan.RecordError(err)
 				log.Printf("Error flushing stream: %v", err)
+				msgSpan.End()
 				break
 			}
+
+			msgSpan.SetStatus(codes.Ok, "")
+			msgSpan.End()
 		}
 	}))
 
