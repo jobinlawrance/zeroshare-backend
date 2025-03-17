@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+
 	"log"
 	"net/url"
 	"os"
@@ -72,6 +73,12 @@ func main() {
 
 	app := fiber.New()
 
+	// Register SSE endpoint before other middleware
+	app.Get("/sse/:sessionToken", func(c *fiber.Ctx) error {
+		sessionToken := c.Params("sessionToken")
+		return controller.SSE(c, redisStore, sessionToken)
+	})
+
 	app.Use(otelfiber.Middleware())
 
 	logger, config := controller.InitSlog(logProvider)
@@ -122,11 +129,6 @@ func main() {
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello, World!")
-	})
-
-	app.Get("/sse/:sessionToken", func(c *fiber.Ctx) error {
-		sessionToken := c.Params("sessionToken")
-		return controller.SSE(c, redisStore, sessionToken)
 	})
 
 	app.Get("/login/:token", func(c *fiber.Ctx) error {
