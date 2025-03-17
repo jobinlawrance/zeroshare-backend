@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -23,5 +24,15 @@ func SetupRedis() *redis.Client {
 		log.Fatal(err)
 		return nil
 	}
+	// Enable tracing instrumentation.
+	if err = redisotel.InstrumentTracing(client); err != nil {
+		panic(err)
+	}
+
+	// Enable metrics instrumentation.
+	if err = redisotel.InstrumentMetrics(client); err != nil {
+		panic(err)
+	}
+
 	return client
 }
