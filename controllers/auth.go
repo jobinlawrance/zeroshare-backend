@@ -75,7 +75,7 @@ func GetAuthData(c *fiber.Ctx, oauthConf *oauth2.Config, db *gorm.DB, redisStore
 	sessionToken := c.Query("state")
 
 	log.Printf("Sending publish message to %s -> %s", sessionToken, user.GoogleID)
-	tokenResponse := createZTNetworkAndGetToken(user, db)
+	tokenResponse := createToken(user)
 
 	log.Printf("token response is %v", tokenResponse)
 
@@ -88,7 +88,7 @@ func GetAuthData(c *fiber.Ctx, oauthConf *oauth2.Config, db *gorm.DB, redisStore
 	return c.Status(200).SendString("You may close this window")
 }
 
-func createZTNetworkAndGetToken(user structs.User, db *gorm.DB) structs.TokenResponse {
+func createToken(user structs.User) structs.TokenResponse {
 	exp := time.Now().Add(time.Hour * 72)
 
 	// Create the JWT claims, which includes the user ID and expiry time
@@ -147,7 +147,7 @@ func GetAuthDataFromGooglePayload(token string, db *gorm.DB) (structs.TokenRespo
 
 	db.Where(structs.User{Email: user.Email}).FirstOrCreate(&user)
 
-	return createZTNetworkAndGetToken(user, db), nil
+	return createToken(user), nil
 }
 
 func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
@@ -280,5 +280,5 @@ func RefreshToken(c *fiber.Ctx, db *gorm.DB, refreshToken string) error {
 		})
 	}
 
-	return c.JSON(createZTNetworkAndGetToken(user, db))
+	return c.JSON(createToken(user))
 }

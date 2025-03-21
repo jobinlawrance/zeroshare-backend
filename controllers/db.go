@@ -31,9 +31,13 @@ func InitDatabase() *gorm.DB {
 	// Enable the extension for generating UUIDs in Postgres if not already enabled
 	db.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";")
 
+	db.Migrator().DropTable(&structs.Peer{})
+
 	// AutoMigrate the User schema
 	db.AutoMigrate(&structs.User{})
-	db.AutoMigrate(&structs.Peer{})
 	db.AutoMigrate(&structs.Device{})
+
+	db.Migrator().DropColumn(&structs.User{}, "zt_network_id")
+
 	return db
 }
