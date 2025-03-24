@@ -14,6 +14,15 @@ import (
 	"gorm.io/gorm"
 )
 
+var nebulaCertPath string
+
+func init() {
+	nebulaCertPath = os.Getenv("NEBULA_CERT_PATH")
+	if nebulaCertPath == "" {
+		nebulaCertPath = "/usr/local/bin/nebula-cert" // fallback default
+	}
+}
+
 func InitNebula(ctx context.Context) {
 	// Paths to the CA certificate and key files
 	caCrtPath := "./certs/ca.crt"
@@ -24,7 +33,7 @@ func InitNebula(ctx context.Context) {
 	// Check if both files exist
 	if !fileExists(caCrtPath) || !fileExists(caKeyPath) {
 		log.Printf("InitNebula: No CA cert or key found, generating new ones")
-		cmd := exec.Command("./bin/nebula-cert", "ca", "--name", "ZeroShare, Inc")
+		cmd := exec.Command(nebulaCertPath, "ca", "--name", "ZeroShare, Inc")
 		// Capture the output
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -70,29 +79,29 @@ func SignPublicKey(publicKey string, deviceId string, db *gorm.DB) (string, stri
 	}
 	log.Printf("New IP: %s", newIP)
 
-	ipWithCIDR := fmt.Sprintf("%s/16", newIP)
+	ipWithCIDR := fmt.Sprintf("%s/8", newIP)
 
 	db.Where("device_id = ?", deviceId).Updates(structs.Device{IpAddress: newIP})
 
 	certName := fmt.Sprintf("%s.neb.jkbx.live", uid)
-	// Use full path to nebula-cert
-	cmd := exec.Command("./bin/nebula-cert", "sign", "-in-pub", fileName, "-name", certName, "-ip", ipWithCIDR)
-	_, err = cmd.CombinedOutput()
+	cmd := exec.Command(nebulaCertPath, "sign", "-in-pub", fileName, "-name", certName, "-ip", ipWithCIDR, "-ca-crt", "./certs/ca.crt", "-ca-key", "./certs/ca.key")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", "", map[string]interface{}{}, err
+		log.Printf("Nebula cert error: %v, output: %s", err, string(output))
+		return "", "", map[string]interface{}{}, fmt.Errorf("failed to sign certificate: %v", err)
 	}
 
 	// Read the generated certificate file
 	certFile := fmt.Sprintf("%s.crt", certName)
 	certContent, err := os.ReadFile(certFile)
 	if err != nil {
-		return "", "", map[string]interface{}{}, err
+		return "", "", map[string]interface{}{}, fmt.Errorf("failed to read cert file: %v", err)
 	}
 	defer os.Remove(certFile)
 
-	caCert, err := os.ReadFile("ca.crt")
+	caCert, err := os.ReadFile("./certs/ca.crt")
 	if err != nil {
-		return "", "", map[string]interface{}{}, err
+		return "", "", map[string]interface{}{}, fmt.Errorf("failed to read CA cert: %v", err)
 	}
 
 	return string(certContent), string(caCert), getIncomingSite(uid), nil
@@ -103,10 +112,10 @@ func getIncomingSite(id string) map[string]interface{} {
 		"name": id,
 		"id":   id,
 		"staticHostmap": map[string]interface{}{
-			"69.69.0.1": map[string]interface{}{
+			"69.0.0.1": map[string]interface{}{
 				"lighthouse": true,
 				"destinations": []string{
-					"34.47.177.77:4242",
+					"0.0.0.0:4242",
 				},
 			},
 		},
@@ -138,7 +147,7 @@ func fileExists(filename string) bool {
 func incrementIP(lastIP string) string {
 	ip := net.ParseIP(lastIP).To4()
 	if ip == nil {
-		return "69.69.0.2" // Default if lastIP is nil
+		return "69.0.0.2" // Default if lastIP is nil
 	}
 
 	// Convert IP to a big.Int, increment it, and convert it back

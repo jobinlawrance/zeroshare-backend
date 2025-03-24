@@ -162,6 +162,7 @@ OTEL_METRICS_ENABLED=%s
 OTEL_LOGS_ENABLED=%s
 OTEL_TRACING_ENABLED=%s
 OTEL_EXPORTER_OTLP_ENDPOINT=%s:4317
+NEBULA_CERT_PATH=./bin/nebula-cert
 `, timezoneName, clientID, clientSecret, authSecret, otelMetrics, otelLogs, otelTracing, otelEndpoint)
 
 			err = os.WriteFile(".env", []byte(envContent), 0644)
