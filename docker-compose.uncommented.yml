@@ -89,7 +89,7 @@ services:
       - ./config:/config
       - ./bin:/shared-bin
       - ./scripts:/scripts
-    entrypoint: ["/scripts/start-lighthouse.sh"]
+    entrypoint: ["/bin/sh", "-c", "apt-get update && apt-get install -y iputils-ping && /scripts/start-lighthouse.sh"]
     ports:
       - "4242:4242/udp"
     cap_add:
