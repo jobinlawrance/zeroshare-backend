@@ -115,7 +115,7 @@ func getIncomingSite(id string) map[string]interface{} {
 			"69.0.0.1": map[string]interface{}{
 				"lighthouse": true,
 				"destinations": []string{
-					"0.0.0.0:4242",
+					"lighthouse.jkbx.live:4242",
 				},
 			},
 		},
