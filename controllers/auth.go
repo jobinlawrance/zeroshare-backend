@@ -172,8 +172,9 @@ func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
 
 	// Listen for messages on the Redis channel and send them as SSE
 	c.Status(fiber.StatusOK).Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
+
+		defer subscriber.Close()
 		for {
-			// Create a child span for each message received
 			msgCtx, msgSpan := tracer.Start(ctx, "SSE.ReceiveMessage")
 
 			msg, err := subscriber.ReceiveMessage(msgCtx)
@@ -189,7 +190,6 @@ func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
 			log.Printf("Sending SSE event to client: %s", sessionToken)
 			data := fmt.Sprintf("data: %s\n\n", msg.Payload)
 
-			// Write data to the stream
 			if _, err := w.WriteString(data); err != nil {
 				msgSpan.SetStatus(codes.Error, err.Error())
 				msgSpan.RecordError(err)
@@ -198,7 +198,6 @@ func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
 				break
 			}
 
-			// Flush the response to send the data immediately
 			if err := w.Flush(); err != nil {
 				msgSpan.SetStatus(codes.Error, err.Error())
 				msgSpan.RecordError(err)
@@ -207,9 +206,14 @@ func SSE(c *fiber.Ctx, redisStore *redis.Client, sessionToken string) error {
 				break
 			}
 
-			msgSpan.SetStatus(codes.Ok, "")
+			if _, err := w.WriteString("event: complete\ndata: Authentication completed\n\n"); err != nil {
+				log.Printf("Error sending completion event: %v", err)
+			}
+			w.Flush()
 			msgSpan.End()
+			return
 		}
+		return
 	}))
 
 	return nil
