@@ -55,15 +55,17 @@ func SignPublicKey(publicKey string, deviceId string, db *gorm.DB) (string, stri
 	defer os.Remove(fileName)
 
 	var latestDevice structs.Device
+	var lastIp string = ""
 	err := db.Model(&structs.Device{}).Where("ip_address IS NOT NULL AND ip_address <> ''").Order("updated DESC").First(&latestDevice).Error
 
 	if err != nil {
 		// Handle error, e.g., log the error or return an appropriate error response
-		log.Println("Error fetching latest device:", err)
-		return "", "", map[string]interface{}{}, err
+		if err != gorm.ErrRecordNotFound {
+			return "", "", map[string]interface{}{}, err
+		}
 	}
 
-	lastIp := latestDevice.IpAddress
+	lastIp = latestDevice.IpAddress
 
 	var device structs.Device
 	err = db.Where("device_id = ?", deviceId).First(&device).Error
