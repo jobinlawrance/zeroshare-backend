@@ -101,40 +101,63 @@ services:
     networks:
       - zeroshare
 
-  # otel-collector:
-  #   container_name: otel-collector
-  #   image: otel/opentelemetry-collector-contrib
-  #   volumes:
-  #     - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
-  #   ports:
-  #     - 1888:1888 # pprof extension
-  #     - 8888:8888 # Prometheus metrics exposed by the Collector
-  #     - 8889:8889 # Prometheus exporter metrics
-  #     - 13133:13133 # health_check extension
-  #     - 4317:4317 # OTLP gRPC receiver
-  #     - 4318:4318 # OTLP http receiver
-  #     - 55679:55679 # zpages extension
-  #   networks:
-  #     - zeroshare
-  #   depends_on:
-  #     - clickhouse
+  uptrace:
+    image: 'uptrace/uptrace:1.7.6'
+    container_name: uptrace
+    restart: on-failure
+    volumes:
+      - ./otel/uptrace.yml:/etc/uptrace/uptrace.yml
+    ports:
+      - '14317:14317'
+      - '14318:14318'
+    environment:
+      - UPTRACE_SELF_TOKEN
+      - UPTRACE_ZEROSHARE_TOKEN
+    env_file:
+      - .env
+    networks:
+      - zeroshare  
+    depends_on:
+      - clickhouse
+      - db
 
-  # clickhouse:
-  #   container_name: clickhouse
-  #   image: clickhouse/clickhouse-server:latest
-  #   volumes:
-  #     - ./otel/clickhouse-init:/docker-entrypoint-initdb.d
-  #   ports:
-  #     - "9000:9000"
-  #     - "8123:8123"
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 3
-  #     start_period: 10s
-  #   networks:
-  #     - zeroshare
+  otel-collector:
+    container_name: otel-collector
+    image: otel/opentelemetry-collector-contrib
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+    environment:
+      - UPTRACE_SELF_TOKEN
+      - UPTRACE_ZEROSHARE_TOKEN
+    env_file:
+      - .env
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    networks:
+      - zeroshare
+    depends_on:
+      - uptrace
+
+  clickhouse:
+    container_name: clickhouse
+    image: clickhouse/clickhouse-server:latest
+    volumes:
+      - ./otel/clickhouse-init:/docker-entrypoint-initdb.d
+      - chdata:/var/lib/clickhouse
+    ports:
+      - "9000:9000"
+      - "8123:8123"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+      start_period: 10s
+    networks:
+      - zeroshare
 
   # grafana:
   #   container_name: grafana
@@ -151,25 +174,27 @@ services:
   #   depends_on:
   #     - clickhouse
 
-  jaeger:
-    image: jaegertracing/jaeger:2.3.0
-    container_name: jaeger
-    restart: unless-stopped
-    environment:
-        - COLLECTOR_OTLP_ENABLED=true
-    ports:
-      - "16686:16686"
-      - "4317:4317"
-      - "4318:4318"
-      - "5778:5778"
-      - "9411:9411"
-    networks: 
-      - zeroshare
+  # jaeger:
+  #   image: jaegertracing/jaeger:2.3.0
+  #   container_name: jaeger
+  #   restart: unless-stopped
+  #   environment:
+  #       - COLLECTOR_OTLP_ENABLED=true
+  #   ports:
+  #     - "16686:16686"
+  #     - "4317:4317"
+  #     - "4318:4318"
+  #     - "5778:5778"
+  #     - "9411:9411"
+  #   networks: 
+  #     - zeroshare
 
 volumes:
   redis_data:
     driver: local
   pgdata:
+    driver: local
+  chdata:
     driver: local
 
 networks:

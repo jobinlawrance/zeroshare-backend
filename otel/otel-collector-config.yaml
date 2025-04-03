@@ -30,6 +30,10 @@ exporters:
       initial_interval: 5s
       max_interval: 30s
       max_elapsed_time: 300s
+  otlp/uptrace:
+    endpoint: http://uptrace:14317
+    tls: { insecure: true }
+    headers: { 'uptrace-dsn': 'http://${UPTRACE_ZEROSHARE_TOKEN}@localhost:14318?grpc=14317' }
 
 extensions:
   health_check:
@@ -40,12 +44,12 @@ service:
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [clickhouse]
+      exporters: [otlp/uptrace]
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [clickhouse]
+      exporters: [otlp/uptrace]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [clickhouse]
+      exporters: [otlp/uptrace]

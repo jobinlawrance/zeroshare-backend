@@ -6,6 +6,7 @@ import (
 	"os"
 	"zeroshare-backend/structs"
 
+	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -28,6 +29,10 @@ func InitDatabase() *gorm.DB {
 		log.Fatal("Failed to connect to database: ", err)
 	}
 
+	if err := db.Use(otelgorm.NewPlugin()); err != nil {
+		log.Fatal("Failed instrument GORM: ", err)
+	}
+
 	// Enable the extension for generating UUIDs in Postgres if not already enabled
 	db.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";")
 
@@ -36,8 +41,6 @@ func InitDatabase() *gorm.DB {
 	// AutoMigrate the User schema
 	db.AutoMigrate(&structs.User{})
 	db.AutoMigrate(&structs.Device{})
-
-	db.Migrator().DropColumn(&structs.User{}, "zt_network_id")
 
 	return db
 }
