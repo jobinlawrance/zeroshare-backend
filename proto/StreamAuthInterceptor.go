@@ -13,11 +13,11 @@ func StreamAuthInterceptor() grpc.StreamServerInterceptor {
 		ss grpc.ServerStream,
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler) error {
-			md, ok := metadata.FromIncomingContext(ss.Context())
-			if !ok {
-				log.Println("no metadata")
-			}
-			log.Println(md)
+		md, ok := metadata.FromIncomingContext(ss.Context())
+		if !ok {
+			log.Println("no metadata")
+		}
+		log.Println(md)
 		return handler(srv, ss)
 	}
 }

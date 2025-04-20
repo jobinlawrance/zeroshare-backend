@@ -113,6 +113,7 @@ services:
     environment:
       - UPTRACE_SELF_TOKEN
       - UPTRACE_ZEROSHARE_TOKEN
+      - UPTRACE_PASSWORD
     env_file:
       - .env
     networks:
@@ -158,36 +159,6 @@ services:
       start_period: 10s
     networks:
       - zeroshare
-
-  # grafana:
-  #   container_name: grafana
-  #   image: grafana/grafana:latest
-  #   volumes:
-  #     - ./otel/grafana.ini:/etc/grafana/grafana.ini
-  #     - ./otel/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
-  #   environment:
-  #     GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
-  #   ports:
-  #     - "3001:3000"
-  #   networks:
-  #     - zeroshare
-  #   depends_on:
-  #     - clickhouse
-
-  # jaeger:
-  #   image: jaegertracing/jaeger:2.3.0
-  #   container_name: jaeger
-  #   restart: unless-stopped
-  #   environment:
-  #       - COLLECTOR_OTLP_ENABLED=true
-  #   ports:
-  #     - "16686:16686"
-  #     - "4317:4317"
-  #     - "4318:4318"
-  #     - "5778:5778"
-  #     - "9411:9411"
-  #   networks: 
-  #     - zeroshare
 
 volumes:
   redis_data:

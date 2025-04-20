@@ -76,9 +76,9 @@ projects:
 ##
 auth:
   users:
-    - name: Anonymous
+    - name: Admin
       email: uptrace@localhost
-      password: uptrace
+      password: ${UPTRACE_PASSWORD}
       notify_by_email: true
 
   # Cloudflare Zero Trust Access (Identity)

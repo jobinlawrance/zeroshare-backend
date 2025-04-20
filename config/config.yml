@@ -27,6 +27,7 @@ firewall:
       proto: any
       host: any
   inbound:
-    - port: any
-      proto: any
+    # Nebula control plane
+    - port: 4242  # Default Nebula port
+      proto: udp  # Critical for Nebula's UDP-based NAT traversal
       host: any

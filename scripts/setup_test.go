@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -18,15 +17,6 @@ func TestGenerateAuthSecret(t *testing.T) {
 	t.Run("normal generation", func(t *testing.T) {
 		secret := generateAuthSecret(30)
 		assert.Len(t, secret, 30, "Secret should be 30 characters long")
-	})
-
-	t.Run("fallback on error", func(t *testing.T) {
-		oldReader := rand.Reader
-		defer func() { rand.Reader = oldReader }()
-		rand.Reader = &errorReader{}
-
-		secret := generateAuthSecret(30)
-		assert.Equal(t, "ChhhH9lL3MiTOaEMcguuHiCHVn", secret, "Should return fallback secret")
 	})
 }
 
@@ -78,45 +68,37 @@ func TestUpdateComposeFile(t *testing.T) {
 services:
   app:
     image: myapp
-  jaeger:
-    image: jaeger
   clickhouse:
     image: clickhouse
   otel-collector:
     image: otel
-  grafana:
-    image: grafana
+  uptrace:
+    image: uptrace
 `
 
 	tests := []struct {
-		name       string
-		setupType  string
-		shouldHave []string
-		shouldNot  []string
+		name          string
+		isOtelEnabled bool
+		shouldHave    []string
+		shouldNot     []string
 	}{
 		{
-			name:       "prod setup",
-			setupType:  "prod",
-			shouldHave: []string{"clickhouse", "otel-collector", "grafana"},
-			shouldNot:  []string{"jaeger"},
+			name:          "prod setup",
+			isOtelEnabled: true,
+			shouldHave:    []string{"clickhouse", "otel-collector", "uptrace"},
+			shouldNot:     []string{"jaeger"},
 		},
 		{
-			name:       "dev setup",
-			setupType:  "dev",
-			shouldHave: []string{"jaeger"},
-			shouldNot:  []string{"clickhouse", "otel-collector", "grafana"},
-		},
-		{
-			name:       "no observability",
-			setupType:  "none",
-			shouldNot:  []string{"jaeger", "clickhouse", "otel-collector", "grafana"},
-			shouldHave: []string{"app"},
+			name:          "dev setup",
+			isOtelEnabled: false,
+			shouldHave:    []string{"app"},
+			shouldNot:     []string{"clickhouse", "otel-collector", "uptrace"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			updated := updateComposeFile(testYAML, tt.setupType)
+			updated := updateComposeFile(testYAML, tt.isOtelEnabled)
 
 			var config map[string]interface{}
 			err := yaml.Unmarshal([]byte(updated), &config)

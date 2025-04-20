@@ -58,7 +58,7 @@ if [ ! -f /certs/ca.crt ] || [ ! -f /certs/ca.key ]; then
     }
     
     echo "Generating lighthouse certificate..."
-    ./nebula-cert sign -name 'lighthouse' -ip '69.0.0.1/8' -groups 'lighthouse' \
+    ./nebula-cert sign -name 'lighthouse' -ip '42.0.0.1/8' -groups 'lighthouse' \
         -out-crt /certs/lighthouse.crt -out-key /certs/lighthouse.key \
         -ca-crt /certs/ca.crt -ca-key /certs/ca.key || {
         echo "Failed to generate lighthouse certificate"

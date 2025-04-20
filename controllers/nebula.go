@@ -114,7 +114,7 @@ func getIncomingSite(id string) map[string]interface{} {
 		"name": id,
 		"id":   id,
 		"staticHostmap": map[string]interface{}{
-			"69.0.0.1": map[string]interface{}{
+			"42.0.0.1": map[string]interface{}{
 				"lighthouse": true,
 				"destinations": []string{
 					"lighthouse.jkbx.live:4242",
@@ -149,7 +149,7 @@ func fileExists(filename string) bool {
 func incrementIP(lastIP string) string {
 	ip := net.ParseIP(lastIP).To4()
 	if ip == nil {
-		return "69.0.0.2" // Default if lastIP is nil
+		return "42.0.0.2" // Default if lastIP is nil
 	}
 
 	// Convert IP to a big.Int, increment it, and convert it back

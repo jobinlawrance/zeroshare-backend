@@ -25,7 +25,7 @@ type Tag struct {
 func generateAuthSecret(length int) string {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
-		return "ChhhH9lL3MiTOaEMcguuHiCHVn" // fallback
+		log.Fatal(err)
 	}
 	return base64.URLEncoding.EncodeToString(bytes)[:length]
 }
@@ -58,7 +58,7 @@ func main() {
 			}
 
 			// Download compose file
-			resp, err := http.Get("https://raw.githubusercontent.com/jobinlawrance/zeroshare-backend/refs/heads/main/docker-compose.uncommented.yml")
+			resp, err := http.Get("https://raw.githubusercontent.com/jobinlawrance/zeroshare-backend/refs/heads/main/docker-compose.yml")
 			if err != nil {
 				return fmt.Errorf("failed to download compose file: %v", err)
 			}
@@ -85,42 +85,33 @@ func main() {
 			if enableObservability == "yes" || enableObservability == "y" {
 				otelTracing = "true"
 
-				// Ask about setup type
-				setupType := strings.ToLower(readInput("Do you want a permanent (prod) or temporary (dev) setup? (prod/dev): "))
-
 				// Create otel directory structure for prod setup
-				if setupType == "prod" {
-					otelEndpoint = "otel-collector"
-					otelMetrics = "true"
-					otelLogs = "true"
-					err := os.MkdirAll("otel/clickhouse-init", 0755)
-					if err != nil {
-						return fmt.Errorf("failed to create otel directories: %v", err)
-					}
+				otelEndpoint = "otel-collector"
+				otelMetrics = "true"
+				otelLogs = "true"
+				err := os.MkdirAll("otel/clickhouse-init", 0755)
+				if err != nil {
+					return fmt.Errorf("failed to create otel directories: %v", err)
+				}
 
-					// Download and save otel configuration files
-					files := map[string]string{
-						"otel/datasource.yaml":             "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/datasource.yaml",
-						"otel/grafana.ini":                 "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/grafana.ini",
-						"otel/otel-collector-config.yaml":  "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/otel-collector-config.yaml",
-						"otel/clickhouse-init/init-db.sql": "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/clickhouse-init/init-db.sql",
-					}
+				// Download and save otel configuration files
+				files := map[string]string{
+					"otel/otel-collector-config.yaml":  "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/otel-collector-config.yaml",
+					"otel/clickhouse-init/init-db.sql": "https://github.com/jobinlawrance/zeroshare-backend/raw/refs/heads/main/otel/clickhouse-init/init-db.sql",
+				}
 
-					for filePath, url := range files {
-						if err := downloadFile(url, filePath); err != nil {
-							return fmt.Errorf("failed to download %s: %v", filePath, err)
-						}
+				for filePath, url := range files {
+					if err := downloadFile(url, filePath); err != nil {
+						return fmt.Errorf("failed to download %s: %v", filePath, err)
 					}
-				} else {
-					otelEndpoint = "jaeger"
 				}
 
 				// Update compose file based on setup type
-				updatedContent := updateComposeFile(string(composeContent), setupType)
+				updatedContent := updateComposeFile(string(composeContent), true)
 				composeContent = []byte(updatedContent)
 			} else {
 				// Comment out all observability services if not enabled
-				updatedContent := updateComposeFile(string(composeContent), "none")
+				updatedContent := updateComposeFile(string(composeContent), false)
 				composeContent = []byte(updatedContent)
 			}
 
@@ -132,7 +123,9 @@ func main() {
 
 			// Generate auth secret
 			authSecret := generateAuthSecret(30)
-
+			uptraceSelfToken := generateAuthSecret(30)
+			uptraceZtToken := generateAuthSecret(30)
+			uptracePassword := generateAuthSecret(12)
 			// Get system timezone
 			timezoneName := "UTC" // default fallback
 			if tzData, err := os.ReadFile("/etc/timezone"); err == nil {
@@ -162,8 +155,26 @@ OTEL_METRICS_ENABLED=%s
 OTEL_LOGS_ENABLED=%s
 OTEL_TRACING_ENABLED=%s
 OTEL_EXPORTER_OTLP_ENDPOINT=%s:4317
+OTEL_EXPORTER_OTLP_HEADERS="uptrace-dsn=http://%s@uptrace:14318?grpc=14317"
+OTEL_EXPORTER_OTLP_COMPRESSION=gzip
+OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION=BASE2_EXPONENTIAL_BUCKET_HISTOGRAM
+OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=DELTA
 NEBULA_CERT_PATH=./bin/nebula-cert
-`, timezoneName, clientID, clientSecret, authSecret, otelMetrics, otelLogs, otelTracing, otelEndpoint)
+UPTRACE_SELF_TOKEN=%s
+UPTRACE_ZEROSHARE_TOKEN=%s
+UPTRACE_PASSWORD=%s
+`, timezoneName,
+				clientID,
+				clientSecret,
+				authSecret,
+				otelMetrics,
+				otelLogs,
+				otelTracing,
+				otelEndpoint,
+				uptraceZtToken,
+				uptraceSelfToken,
+				uptraceZtToken,
+				uptracePassword)
 
 			err = os.WriteFile(".env", []byte(envContent), 0644)
 			if err != nil {
@@ -272,14 +283,14 @@ func downloadFile(url, filepath string) error {
 	return os.WriteFile(filepath, content, 0644)
 }
 
-func updateComposeFile(content, setupType string) string {
+func updateComposeFile(content string, isOtelEnabled bool) string {
 	var composeConfig map[string]interface{}
 	if err := yaml.Unmarshal([]byte(content), &composeConfig); err != nil {
 		return content
 	}
 
 	services := composeConfig["services"].(map[string]interface{})
-	observabilityServices := []string{"jaeger", "clickhouse", "otel-collector", "grafana"}
+	observabilityServices := []string{"uptrace", "clickhouse", "otel-collector"}
 
 	// Create a copy of the original compose file
 	var baseConfig map[string]interface{}
@@ -287,20 +298,7 @@ func updateComposeFile(content, setupType string) string {
 		return content
 	}
 
-	// Handle observability services based on setup type
-	switch setupType {
-	case "prod":
-		// Remove jaeger, keep other observability services
-		delete(services, "jaeger")
-	case "dev":
-		// Keep only jaeger, remove other observability services
-		for _, service := range observabilityServices {
-			if service != "jaeger" {
-				delete(services, service)
-			}
-		}
-	case "none":
-		// Remove all observability services
+	if !isOtelEnabled {
 		for _, service := range observabilityServices {
 			delete(services, service)
 		}
